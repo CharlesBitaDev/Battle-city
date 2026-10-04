@@ -12,15 +12,16 @@ var BC = window.BC || (window.BC = {});
   var HOUSE_X = 13 * T + 4, HOUSE_Y = 13 * T + 4, OUT_Y = 10 * T + 4;   // cats' house and the tile above its door
   var SNACK_X = 13 * T + 4, SNACK_Y = 16 * T + 4;
   var CORNERS = [[24, -3], [2, -3], [26, 29], [0, 29]];   // where each cat heads when scattering
+  // Walls are thin outlines on black, like the arcade maze games; the colour changes each level.
   var PALETTES = [
-    { fill: '#38200e', edge: '#e0a050', crumb: '#ffe08a' },
-    { fill: '#112e24', edge: '#5ad090', crumb: '#fff0b0' },
-    { fill: '#2c1438', edge: '#c47af0', crumb: '#ffe08a' },
-    { fill: '#102244', edge: '#64a4f4', crumb: '#fff0b0' },
-    { fill: '#40141c', edge: '#f47a8a', crumb: '#ffe08a' },
-    { fill: '#24242a', edge: '#c8c8d4', crumb: '#ffe08a' }
+    { edge: '#3a5cff', crumb: '#ffd8a8' },
+    { edge: '#f0a040', crumb: '#ffe08a' },
+    { edge: '#40d090', crumb: '#fff0b0' },
+    { edge: '#e060e0', crumb: '#ffe08a' },
+    { edge: '#ff6060', crumb: '#fff0b0' },
+    { edge: '#40c8f0', crumb: '#ffe08a' }
   ];
-  var FLOOR = '#0e0a08';
+  var FLOOR = '#000000';
   var SNACK_AT = [70, 170];
   var BONUS_LIVES = [10000, 50000];
 
@@ -152,37 +153,65 @@ var BC = window.BC || (window.BC = {});
   function wrapX(tx) { return tx < 0 ? tx + S : tx >= S ? tx - S : tx; }
   function open(tx, ty) { var c = cell(tx, ty); return c !== '#' && c !== '-' && c !== '='; }
 
+  // Offsets within 8px, nearest first, for the wall outline below.
+  var NEAR = (function () {
+    var list = [];
+    for (var dy = -8; dy <= 8; dy++) for (var dx = -8; dx <= 8; dx++) {
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d > 0 && d <= 8) list.push([dx, dy, d]);
+    }
+    list.sort(function (a, b) { return a[2] - b[2]; });
+    return list;
+  })();
+
+  // Works out which pixels of the wall tiles make the outline: a thin line set 3px back from
+  // every corridor (its corners come out rounded), and a second line along the maze's edge.
+  function wallOutline() {
+    var n = S * T;
+    var open = new Uint8Array(n * n);
+    for (var py = 0; py < n; py++) for (var px = 0; px < n; px++) {
+      if (G.map[py >> 3][px >> 3] !== '#') open[py * n + px] = 1;
+    }
+    var line = [], line2 = [];
+    for (var y = 0; y < n; y++) {
+      for (var x = 0; x < n; x++) {
+        if (open[y * n + x]) continue;
+        var d = 99;
+        for (var k = 0; k < NEAR.length; k++) {
+          var ox = x + NEAR[k][0], oy = y + NEAR[k][1];
+          if (ox < 0 || oy < 0 || ox >= n || oy >= n || !open[oy * n + ox]) continue;
+          d = NEAR[k][2];
+          break;
+        }
+        if (d >= 3.5 && d < 4.5) line.push(y * n + x);
+        else if (d >= 6.5 && d < 7.5) {
+          var tx = x >> 3, ty = y >> 3;
+          if (tx === 0 || ty === 0 || tx === S - 1 || ty === S - 1) line2.push(y * n + x);
+        }
+      }
+    }
+    return line.concat(line2);
+  }
+
   // Walls and crumbs drawn once into a layer; eaten crumbs are cleared from it.
   function drawMazeLayer(flash) {
     if (!G.layer) G.layer = BC.canvas(S * T, S * T);
+    if (G.outlineFor !== G.level) { G.outline = wallOutline(); G.outlineFor = G.level; }
     var x = G.layer.getContext('2d');
-    var pal = G.pal;
+    var pal = G.pal, n = S * T;
     x.fillStyle = FLOOR;
-    x.fillRect(0, 0, S * T, S * T);
-    var wall = function (tx, ty) { return tx < 0 || tx >= S || ty < 0 || ty >= S ? cell(tx, ty) !== 'T' : G.map[ty][tx] === '#'; };
+    x.fillRect(0, 0, n, n);
+    x.fillStyle = flash ? '#ffffff' : pal.edge;
+    for (var i = 0; i < G.outline.length; i++) x.fillRect(G.outline[i] % n, Math.floor(G.outline[i] / n), 1, 1);
     for (var ty = 0; ty < S; ty++) {
       for (var tx = 0; tx < S; tx++) {
         var c = G.map[ty][tx];
-        var X = tx * T, Y = ty * T;
-        if (c === '#') {
-          x.fillStyle = pal.fill;
-          x.fillRect(X, Y, T, T);
-          x.fillStyle = flash ? '#ffffff' : pal.edge;
-          if (!wall(tx, ty - 1)) x.fillRect(X, Y, T, 1);
-          if (!wall(tx, ty + 1)) x.fillRect(X, Y + T - 1, T, 1);
-          if (!wall(tx - 1, ty)) x.fillRect(X, Y, 1, T);
-          if (!wall(tx + 1, ty)) x.fillRect(X + T - 1, Y, 1, T);
-          // little rounded corners where only a diagonal is open
-          if (wall(tx, ty - 1) && wall(tx - 1, ty) && !wall(tx - 1, ty - 1)) x.fillRect(X, Y, 1, 1);
-          if (wall(tx, ty - 1) && wall(tx + 1, ty) && !wall(tx + 1, ty - 1)) x.fillRect(X + T - 1, Y, 1, 1);
-          if (wall(tx, ty + 1) && wall(tx - 1, ty) && !wall(tx - 1, ty + 1)) x.fillRect(X, Y + T - 1, 1, 1);
-          if (wall(tx, ty + 1) && wall(tx + 1, ty) && !wall(tx + 1, ty + 1)) x.fillRect(X + T - 1, Y + T - 1, 1, 1);
-        } else if (c === '-') {
+        if (c === '-') {
           x.fillStyle = '#f4a6b8';
-          x.fillRect(X, Y + 3, T, 2);
+          x.fillRect(tx * T, ty * T + 3, T, 2);
         } else if (c === '.') {
           x.fillStyle = pal.crumb;
-          x.fillRect(X + 3, Y + 3, 2, 2);
+          x.fillRect(tx * T + 3, ty * T + 3, 2, 2);
         }
       }
     }
