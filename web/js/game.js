@@ -58,6 +58,7 @@ var BC = window.BC || (window.BC = {});
   function go(s) {
     scene = s;
     sceneT = 0;
+    if (s !== 'play') BC.audio.engine(0);
     BC.input.clearNav();
     BC.platform.broadcast(s === 'play' ? 'mode:game' : 'mode:menu');
   }
@@ -318,7 +319,7 @@ var BC = window.BC || (window.BC = {});
       speed: t.bspeed, owner: t, steel: t.steel, player: t.isPlayer, dead: false
     });
     t.bulletsOut++;
-    if (t.isPlayer) sfx('shoot');
+    sfx(t.isPlayer ? 'shoot' : 'eshoot');
     return true;
   }
 
@@ -643,6 +644,7 @@ var BC = window.BC || (window.BC = {});
       if (navs[n].b === 'back' && !G.lost) {
         G.paused = true;
         G.pauseSel = 0;
+        BC.audio.engine(0);
         sfx('pause');
         BC.platform.broadcast('mode:menu');
         return;
@@ -668,7 +670,14 @@ var BC = window.BC || (window.BC = {});
       G.spawnTimer = spawnEnemy() ? G.spawnInterval : 20;
     }
     var i;
-    for (i = 0; i < G.players.length; i++) if (G.players[i]) updatePlayer(G.players[i]);
+    var engine = 0;
+    for (i = 0; i < G.players.length; i++) {
+      var P = G.players[i];
+      if (!P) continue;
+      updatePlayer(P);
+      if (P.tank && !P.tank.dead && P.tank.spawn <= 0 && !G.lost) engine = Math.max(engine, P.tank.moving ? 2 : 1);
+    }
+    BC.audio.engine(engine);
     for (i = 0; i < G.tanks.length; i++) {
       var t = G.tanks[i];
       if (!t.dead && !t.isPlayer) updateEnemy(t);
@@ -1068,6 +1077,7 @@ var BC = window.BC || (window.BC = {});
     },
     // Pause when the app goes to the background.
     pause: function () {
+      BC.audio.engine(0);
       if (scene === 'play' && G && !G.paused && !G.lost) {
         G.paused = true;
         G.pauseSel = 0;
