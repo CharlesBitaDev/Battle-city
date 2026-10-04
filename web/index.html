@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Battle City</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  #wrap { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+  body[data-portrait="1"] #wrap { align-items: flex-start; padding-top: 12px; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+  /* On-screen buttons, only in phone browsers (the TV uses the remote). */
+  #touch[hidden] { display: none; }
+  #t-pad, #t-fire, #t-menu { position: fixed; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #t-pad { left: 4vmin; bottom: 4vmin; width: 40vmin; height: 40vmin; border-radius: 50%;
+           background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25); }
+  #t-pad span { position: absolute; width: 0; height: 0; border: 4.5vmin solid transparent; opacity: 0.6; }
+  #t-pad .u { left: 50%; top: 5%; margin-left: -4.5vmin; border-bottom: 6vmin solid #fff; border-top: 0; }
+  #t-pad .d { left: 50%; bottom: 5%; margin-left: -4.5vmin; border-top: 6vmin solid #fff; border-bottom: 0; }
+  #t-pad .l { top: 50%; left: 5%; margin-top: -4.5vmin; border-right: 6vmin solid #fff; border-left: 0; }
+  #t-pad .r { top: 50%; right: 5%; margin-top: -4.5vmin; border-left: 6vmin solid #fff; border-right: 0; }
+  #t-pad[data-dir="up"] .u, #t-pad[data-dir="down"] .d, #t-pad[data-dir="left"] .l, #t-pad[data-dir="right"] .r { opacity: 1; }
+  #t-fire { right: 6vmin; bottom: 8vmin; width: 26vmin; height: 26vmin; border-radius: 50%;
+            background: rgba(220,60,40,0.55); border: 2px solid rgba(255,255,255,0.4);
+            color: #fff; font: bold 4vmin sans-serif; display: flex; align-items: center; justify-content: center; }
+  #t-fire.on { background: rgba(255,90,60,0.9); }
+  #t-menu { right: 3vmin; top: 3vmin; width: 11vmin; height: 11vmin; border-radius: 50%;
+            background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.3);
+            color: #fff; font: bold 3.5vmin sans-serif; display: flex; align-items: center; justify-content: center; }
+  body[data-portrait="1"] #t-pad { width: 44vw; height: 44vw; bottom: 8vh; }
+  body[data-portrait="1"] #t-fire { width: 28vw; height: 28vw; bottom: 14vh; }
+  body[data-portrait="1"] #t-menu { top: auto; bottom: 3vh; right: 40vw; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="screen" width="384" height="216"></canvas></div>
+<div id="touch" hidden>
+  <div id="t-pad" aria-label="Move"><span class="u"></span><span class="d"></span><span class="l"></span><span class="r"></span></div>
+  <div id="t-fire" role="button" aria-label="Fire">FIRE</div>
+  <div id="t-menu" role="button" aria-label="Menu">II</div>
+</div>
+<script src="js/qrcode.js"></script>
+<script src="js/font.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
