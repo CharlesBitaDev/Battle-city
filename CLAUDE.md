@@ -52,4 +52,5 @@ A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmwa
 - Sound: `kiko/web/js/audio.js` (8-bit effects and four original music loops). `node kiko/tools/render-sounds.mjs` records them to `kiko/web/sounds/*.ogg` (music as `music-<world>.ogg`); the TV app plays effects with SoundPool and music with MediaPlayer via `Android.playSound(name, vol)` / `Android.music(name)` ("" = stop). Re-run the recorder after changing any sound.
 - Icons/banner: `node kiko/tools/make-icons.mjs`. Saves go to SharedPreferences "kiko", key `kiko-save` (`best` level index reached, `hi`, `muted`, `music`).
 - Debug: `kiko/web/index.html?debug=1` unlocks all levels; `BC.game.debug` has `startLevel(players, index)`, `give(i, form)`, `kill(i)`, `teleport(i, col, row)`, `state()`.
+- Direct install link for the TV's Downloader app: **tinyurl.com/kikoquest** (points to `dist/kiko.apk`). Usually the owner installs it from the Game Store instead.
 - The owner asked for these games to live in their own "Game-store" repo; it didn't exist yet (2026-10-04), so Kiko lives here for now.
