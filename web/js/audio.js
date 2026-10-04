@@ -12,6 +12,8 @@ BC.audio = (function () {
   var last = {};
   var engine = null;
   var engineLevel = 0;
+  // In the TV app, pre-recorded sounds are played natively (much lighter for the TV).
+  var NATIVE = (window.Android && typeof window.Android.playSound === 'function') ? window.Android : null;
 
   // ------------------------------------------------------------------ set-up
   function ensure() {
@@ -305,17 +307,25 @@ BC.audio = (function () {
   return {
     play: function (name) {
       if (muted || !S[name]) return;
+      var now = Date.now() / 1000;
+      if (last[name] && now - last[name] < (GAP[name] || 0.02)) return;
+      last[name] = now;
+      if (NATIVE) {
+        try { NATIVE.playSound(name, 1); } catch (e) { /* ignore */ }
+        return;
+      }
       if (!ensure()) return;
-      var t = ac.currentTime;
-      if (last[name] && t - last[name] < (GAP[name] || 0.02)) return;
-      last[name] = t;
-      try { S[name](t + 0.005); } catch (e) { /* ignore */ }
+      try { S[name](ac.currentTime + 0.005); } catch (e) { /* ignore */ }
     },
     // 0 = off, 1 = idling, 2 = driving
     engine: function (level) {
       if (muted) level = 0;
       if (level === engineLevel) return;
       engineLevel = level;
+      if (NATIVE) {
+        try { NATIVE.engine(level); } catch (e) { /* ignore */ }
+        return;
+      }
       if (!ac) { if (!level) return; if (!ensure()) return; }
       try {
         if (!engine) { if (!level) return; startEngine(); }
@@ -328,7 +338,7 @@ BC.audio = (function () {
         engine.lfo.frequency.setTargetAtTime(drive ? 16 : 9, t, 0.2);
       } catch (e) { /* ignore */ }
     },
-    unlock: function () { ensure(); },
+    unlock: function () { if (!NATIVE) ensure(); },
     suspend: function () {
       if (!ac) return;
       try {

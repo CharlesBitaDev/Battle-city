@@ -16,13 +16,13 @@ rm -rf "$OUT"
 mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/assets/web"
 
 # Game files go into the app's assets.
-cp -r web/index.html web/controller.html web/js "$OUT/assets/web/"
+cp -r web/index.html web/controller.html web/js web/sounds "$OUT/assets/web/"
 
 "$BT/aapt2" compile --dir android/res -o "$OUT/res.zip"
 "$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" \
   --manifest android/AndroidManifest.xml -A "$OUT/assets" "$OUT/res.zip" \
   --java "$OUT/gen" --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" \
-  --min-sdk-version 21 --target-sdk-version 34
+  --min-sdk-version 21 --target-sdk-version 34 -0 ogg
 
 javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 -bootclasspath "$JAR" -d "$OUT/classes" \
   $(find android/src "$OUT/gen" -name '*.java')

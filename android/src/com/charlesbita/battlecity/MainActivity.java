@@ -2,7 +2,10 @@ package com.charlesbita.battlecity;
 
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.Color;
+import android.media.AudioAttributes;
+import android.media.SoundPool;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,6 +20,8 @@ import android.webkit.WebViewClient;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Shows the game (web/index.html from the app's assets) full screen, passes the TV remote's
@@ -29,6 +34,10 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
     private WebView web;
     private ControllerServer server;
     private SharedPreferences prefs;
+    private SoundPool pool;
+    private final Map<String, Integer> sounds = new HashMap<String, Integer>();
+    private int engineStream = 0;
+    private int engineLevel = 0;
     private final Handler ui = new Handler(Looper.getMainLooper());
 
     @Override
@@ -54,6 +63,7 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
             public byte[] read(String name) throws IOException { return readAsset(name); }
         });
         server.start(PORT);
+        loadSounds();
 
         web.loadUrl("file:///android_asset/web/index.html");
     }
@@ -148,11 +158,74 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
         js("BC.phoneMenu(" + slot + ")");
     }
 
+    // ------------------------------------------------------------------ sound
+    // The sound effects are pre-recorded files (web/sounds/*.ogg) played by Android's
+    // SoundPool, which is much lighter than synthesising them in the WebView.
+
+    private void loadSounds() {
+        AudioAttributes attrs = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        pool = new SoundPool.Builder().setMaxStreams(10).setAudioAttributes(attrs).build();
+        pool.setOnLoadCompleteListener(new SoundPool.OnLoadCompleteListener() {
+            public void onLoadComplete(SoundPool p, int sampleId, int status) {
+                Integer engine = sounds.get("engine");
+                if (status == 0 && engine != null && engine == sampleId) applyEngine();
+            }
+        });
+        try {
+            String[] files = getAssets().list("web/sounds");
+            if (files == null) return;
+            for (String f : files) {
+                if (!f.endsWith(".ogg")) continue;
+                AssetFileDescriptor fd = getAssets().openFd("web/sounds/" + f);
+                sounds.put(f.substring(0, f.length() - 4), pool.load(fd, 1));
+                fd.close();
+            }
+        } catch (IOException e) {
+            // no sounds; the game still runs
+        }
+    }
+
+    private void playSound(String name, float volume) {
+        Integer id = sounds.get(name);
+        if (pool == null || id == null) return;
+        float v = Math.max(0f, Math.min(1f, volume));
+        pool.play(id, v, v, 1, 0, 1f);
+    }
+
+    private synchronized void setEngine(int level) {
+        engineLevel = level;
+        applyEngine();
+    }
+
+    /** 0 = off, 1 = idling, 2 = driving (louder and faster). */
+    private synchronized void applyEngine() {
+        Integer id = sounds.get("engine");
+        if (pool == null || id == null) return;
+        if (engineLevel == 0) {
+            if (engineStream != 0) pool.stop(engineStream);
+            engineStream = 0;
+            return;
+        }
+        float vol = engineLevel == 2 ? 0.55f : 0.22f;
+        float rate = engineLevel == 2 ? 1.45f : 1.0f;
+        if (engineStream == 0) {
+            engineStream = pool.play(id, vol, vol, 0, -1, rate);
+        } else {
+            pool.setVolume(engineStream, vol, vol);
+            pool.setRate(engineStream, rate);
+        }
+    }
+
     // ------------------------------------------------------------------ life cycle
 
     @Override
     protected void onPause() {
         js("BC.onPause()");
+        setEngine(0);
+        if (pool != null) pool.autoPause();
         if (web != null) web.onPause();
         super.onPause();
     }
@@ -160,6 +233,7 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
     @Override
     protected void onResume() {
         super.onResume();
+        if (pool != null) pool.autoResume();
         if (web != null) {
             web.onResume();
             hideSystemUi();
@@ -170,6 +244,10 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
     @Override
     protected void onDestroy() {
         if (server != null) server.stop();
+        if (pool != null) {
+            pool.release();
+            pool = null;
+        }
         if (web != null) {
             web.destroy();
             web = null;
@@ -214,6 +292,16 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
             ui.post(new Runnable() {
                 public void run() { finish(); }
             });
+        }
+
+        @JavascriptInterface
+        public void playSound(String name, float volume) {
+            MainActivity.this.playSound(name, volume);
+        }
+
+        @JavascriptInterface
+        public void engine(int level) {
+            setEngine(level);
         }
 
         @JavascriptInterface

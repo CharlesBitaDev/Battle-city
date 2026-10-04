@@ -1,12 +1,13 @@
 # Battle City: notes for Claude
 
-A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmware, Mali-450 GPU, **no Play Store**). The owner works from a phone only: never ask them to run commands. They test by installing the APK from the GitHub release.
+A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmware, Mali-450 GPU, **no Play Store**). The owner works from a phone only: never ask them to run commands. They install the APK on the TV by typing **tinyurl.com/battlecitytv** in its Downloader app. The link points to `dist/battle-city.apk` on branch `ccr-b0870caf-5uxupg`, so every update must commit a rebuilt `dist/battle-city.apk` there. Their TV has no Play Store and no working ADB, and a USB or phone-cable install shows "Can't open file".
 
 ## How it works
 
 - The game is plain HTML5 canvas + JavaScript in `web/`, and the Android app (`android/`) shows it full screen in a WebView, loaded from the APK's assets.
 - **JavaScript must stay ES2017** (old TV WebView): no `?.`, `??`, class fields, `Array.flat`, `Object.fromEntries`, ES modules. Also avoid newer CSS like `inset` or `aspect-ratio` in `index.html`. `node tools/check.mjs` enforces the syntax part.
 - Logical screen 384x216 (16:9), battlefield 208x208 at (88,4), 26x26 cells of 8px. Bricks are tracked in 4px quarters (`G.bq`); a shell removes a 4px strip 16px wide. Fixed 60 Hz update in `main.js`.
+- **Sound on the TV is native:** `node tools/render-sounds.mjs` records every effect from `audio.js` (plus a seamless `engine` loop) into `web/sounds/*.ogg`. The TV app plays them with Android `SoundPool` via `Android.playSound(name, vol)` / `Android.engine(level)` (0 off, 1 idle, 2 driving = louder and 1.45x speed). Live WebAudio synthesis is only used in browsers. The owner reported the live-synth sound playing badly on the TV, so re-run the recorder after changing any sound in `audio.js`. `build-apk.sh` stores `.ogg` files uncompressed (`-0 ogg`), as `openFd` needs.
 - Files: `font.js` (5x7 pixel font, cached), `sprites.js` (all graphics drawn in code), `levels.js` (generated), `audio.js` (WebAudio blips), `input.js` (merges remote/phone/keyboard/touch per player), `game.js` (rules + all screens), `main.js` (loop, platform bridge, keyboard, on-screen touch buttons for phone browsers), `qrcode.js` (vendored kazuhikoarase/qrcode-generator 2.0.4, MIT).
 - Stages: `node tools/gen-levels.mjs` regenerates `web/js/levels.js` deterministically (seeded). It checks every stage is reachable and the base's middle lane is shielded. Don't hand-edit `levels.js`.
 - Difficulty per stage: in `buildStage()` (`speedMul`, `smart`, `fireChance`, `spawnInterval`) and the enemy roster in `gen-levels.mjs`.
