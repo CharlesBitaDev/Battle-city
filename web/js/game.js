@@ -132,11 +132,14 @@ var BC = window.BC || (window.BC = {});
     G.paused = false;
     G.pauseSel = 0;
     var s = G.stage;
-    G.speedMul = 1 + Math.min(0.3, s * 0.003);
-    G.smart = Math.min(0.75, 0.12 + s * 0.0065);
-    G.fireChance = Math.min(0.045, 0.008 + s * 0.0004);
-    G.spawnInterval = Math.max(70, 190 - s * 1.3) * (G.mode === 2 ? 0.8 : 1);
-    G.maxOnField = G.mode === 2 ? 6 : 4;
+    // The first ten stages are gentler: slower, calmer enemies, fewer at a time.
+    var ease = Math.max(0, 1 - (s - 1) / 10);   // 1 on stage 1, 0 from stage 11
+    G.ease = ease;
+    G.speedMul = (1 + Math.min(0.3, s * 0.003)) * (1 - 0.25 * ease);
+    G.smart = Math.min(0.75, 0.12 + s * 0.0065) * (1 - 0.6 * ease);
+    G.fireChance = Math.min(0.045, 0.008 + s * 0.0004) * (1 - 0.5 * ease);
+    G.spawnInterval = Math.max(70, 190 - s * 1.3) * (1 + 0.6 * ease) * (G.mode === 2 ? 0.8 : 1);
+    G.maxOnField = (s <= 3 ? 2 : s <= 7 ? 3 : 4) + (G.mode === 2 ? 2 : 0);
     G.players.forEach(function (P) {
       if (!P) return;
       P.kills = [0, 0, 0, 0];
@@ -238,7 +241,7 @@ var BC = window.BC || (window.BC = {});
       t.maxBullets = (G.stage > 60 && t.etype >= 2) ? 2 : 1;
       t.bonus = G.qi === 3 || G.qi === 10 || G.qi === 17;
       t.ai = 30;
-      t.fireCd = 45;
+      t.fireCd = 45 + Math.round(60 * G.ease);
       if (t.bonus) G.power = null;
       G.tanks.push(t);
       G.qi++;
@@ -348,7 +351,7 @@ var BC = window.BC || (window.BC = {});
     var inp = playerInput(P.i);
     if (t.spawn > 0) {
       t.spawn--;
-      if (t.spawn === 0) t.shield = Math.max(t.shield, 180);
+      if (t.spawn === 0) t.shield = Math.max(t.shield, 180 + Math.round(180 * G.ease));
       return;
     }
     if (t.shield > 0) t.shield--;
