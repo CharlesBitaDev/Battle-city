@@ -1,6 +1,9 @@
 package com.charlesbita.kiko;
 
 import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.app.UiModeManager;
 import android.content.SharedPreferences;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Color;
@@ -284,6 +287,16 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
 
     /** Methods the game's JavaScript can call as window.Android.*. */
     private final class Bridge {
+        /** True on a touch-screen phone or tablet, false on a TV (which uses the remote). */
+        @JavascriptInterface
+        public boolean isTouch() {
+            PackageManager pm = getPackageManager();
+            UiModeManager um = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+            boolean tv = (um != null && um.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION)
+                    || pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+            return !tv && pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN);
+        }
+
         @JavascriptInterface
         public String getAddress() {
             String ip = ControllerServer.localIp();

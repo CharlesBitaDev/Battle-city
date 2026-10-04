@@ -4,7 +4,16 @@ var BC = window.BC || (window.BC = {});
 (function () {
   'use strict';
   var A = window.Android || null;   // Java bridge inside the TV app
-  var touch = !A && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  var touch = false;        // on-screen buttons are showing
+  var touchMade = false;
+
+  // Phones and tablets get on-screen buttons, in a browser or in the installed app (which says
+  // whether the device is a touch phone rather than a TV). A TV never shows them; if they ever
+  // appear there, the first remote button hides them again.
+  function wantsTouch() {
+    if (!A) return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    try { return !!(A.isTouch && A.isTouch()) && navigator.maxTouchPoints > 0; } catch (e) { return false; }
+  }
 
   // ------------------------------------------------------------------ platform
   var addrCache = '';
@@ -45,6 +54,7 @@ var BC = window.BC || (window.BC = {});
     var btn = name === 'ok' ? 'fire' : name;
     if (releaseTimers[btn]) { clearTimeout(releaseTimers[btn]); releaseTimers[btn] = 0; }
     if (down) {
+      if (touch) showTouch(false);
       BC.audio.unlock();
       BC.input.press('rc', 0, btn, true);
     } else {
@@ -121,11 +131,18 @@ var BC = window.BC || (window.BC = {});
     BC.input.releaseSource('tc');
   });
 
-  // ------------------------------------------------------------------ on-screen buttons (phone browsers)
+  // ------------------------------------------------------------------ on-screen buttons (phones)
+  function showTouch(on) {
+    if (on && !touchMade) { touchMade = true; setupTouch(); }
+    if (!touchMade) return;
+    touch = on;
+    document.getElementById('touch').hidden = !on;
+    document.body.className = on ? 'has-touch' : '';
+    if (!on) BC.input.releaseSource('tc');
+    resize();
+  }
+
   function setupTouch() {
-    var box = document.getElementById('touch');
-    box.hidden = false;
-    document.body.className += ' has-touch';
     var pad = document.getElementById('t-pad');
     var fireBtn = document.getElementById('t-fire');
     var menuBtn = document.getElementById('t-menu');
@@ -187,7 +204,9 @@ var BC = window.BC || (window.BC = {});
     var vw = window.innerWidth, vh = window.innerHeight;
     var portrait = touch && vh > vw;
     var availH = portrait ? vh * 0.55 : vh;
-    var s = Math.min(vw / BC.game.W, availH / BC.game.H) * (A ? 0.96 : 1);
+    // landscape phone: leave room at the sides for the on-screen buttons
+    var availW = touch && !portrait ? vw - Math.min(vw, vh) * 0.6 : vw;
+    var s = Math.min(availW / BC.game.W, availH / BC.game.H) * (A && !touch ? 0.96 : 1);
     if (s >= 2 && Math.floor(s) >= s * 0.9) s = Math.floor(s);
     cv.style.width = Math.floor(BC.game.W * s) + 'px';
     cv.style.height = Math.floor(BC.game.H * s) + 'px';
@@ -215,7 +234,8 @@ var BC = window.BC || (window.BC = {});
   }
 
   window.addEventListener('resize', resize);
-  if (touch) setupTouch();
+  if (wantsTouch()) showTouch(true);
+  window.addEventListener('touchstart', function () { if (!touch) showTouch(true); }, { passive: true });
   BC.game.init();
   resize();
   if (/[?&]debug=1/.test(location.search)) BC.game.debug.unlockAll();

@@ -43,6 +43,10 @@ A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmwa
 - The owner installs the store once from **tinyurl.com/bttstore** (points to `dist/game-store.apk`). Icons: `node tools/make-store-icons.mjs`.
 - The owner's TV has no reachable "Install unknown apps" setting for Game Store (2026-10-04), so when `mayInstall()` is false, or an install fails, the store shows "other ways": hand the APK link to Downloader (`com.esaba.downloader`, already allowed to install) or a browser with `Android.openWith(url, pkg)` (ACTION_VIEW; if Downloader won't take a link it is just opened and the page tells them the short link), try installing anyway (the system may prompt), or open the setting. Each catalog entry has a `link` (its tinyurl) shown there.
 
+## Phones
+
+- The game APKs also run on phones (owner asked, 2026-10-04). `main.js` (same in all three games) shows the on-screen pad and button when `Android.isTouch()` says the device is a touch phone, not a TV (UiModeManager television mode or leanback = TV), and `navigator.maxTouchPoints > 0`; any touch also shows them, and any remote key (not Back) hides them, so a TV that misreports itself still behaves. In landscape the game is shrunk to leave `0.6 * vmin` at the sides for the buttons. The TV keeps its 0.96 overscan margin.
+
 ## Kiko's Quest (kiko/)
 
 - A second game: an original side-scrolling platformer (not Mario: own hero, enemies, tunes and levels). Hero Kiko (orange fox, teal scarf); player 2 is Miko (blue fox, orange scarf). Package `com.charlesbita.kiko`, built by `kiko/build-apk.sh` into `kiko/build/kiko.apk`; copy it to `dist/kiko.apk` and commit. Signed with the same key as Battle City (`android/battle-city.keystore`). Listed in `store/catalog.json` as `kiko`.
