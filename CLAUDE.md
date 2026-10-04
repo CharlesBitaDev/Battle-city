@@ -1,6 +1,6 @@
 # Battle City: notes for Claude
 
-A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmware, Mali-450 GPU, **no Play Store**). The owner works from a phone only: never ask them to run commands. They install the APK on the TV by typing **tinyurl.com/battlecitytv** in its Downloader app. The link points to `dist/battle-city.apk` on branch `ccr-b0870caf-5uxupg`, so every update must commit a rebuilt `dist/battle-city.apk` there. Their TV has no Play Store and no working ADB, and a USB or phone-cable install shows "Can't open file".
+A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmware, Mali-450 GPU, **no Play Store**). The owner works from a phone only: never ask them to run commands. They install the APK on the TV by typing **tinyurl.com/btt000** in its Downloader app (the older tinyurl.com/battlecitytv goes to the same place). Both links point to `dist/battle-city.apk` on branch `ccr-b0870caf-5uxupg`, so every update must commit a rebuilt `dist/battle-city.apk` there. Their TV has no Play Store and no working ADB, and a USB or phone-cable install shows "Can't open file".
 
 ## How it works
 
