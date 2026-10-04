@@ -70,11 +70,11 @@ var BC = window.BC || (window.BC = {});
   // ------------------------------------------------------------------ level settings
   function speeds(L) {
     return {
-      mouse: Math.min(1.45, 1.15 + L * 0.02),
-      cat: Math.min(1.42, 0.98 + L * 0.025),
-      scared: 0.68,
-      tunnel: 0.6,
-      eyes: 2.6,
+      mouse: Math.min(1.15, 0.85 + L * 0.012),
+      cat: Math.min(1.1, 0.72 + L * 0.015),
+      scared: 0.5,
+      tunnel: 0.45,
+      eyes: 2.0,
       fright: Math.max(90, 380 - L * 16),
       // scatter, chase, scatter, chase... (frames); the last chase never ends
       waves: L < 4 ? [420, 1200, 420, 1200, 300, 1200, 300] : [300, 1500, 300, 1500, 240, 1800, 120],
