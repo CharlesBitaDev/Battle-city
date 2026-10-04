@@ -23,7 +23,10 @@ var BC = window.BC || (window.BC = {});
   var ENEMY_SPAWN_X = [96, 192, 0];
   var PLAYER_SPAWN = [[64, 192], [128, 192]];
   var BASE_X = 96, BASE_Y = 192;
-  var POWERS = ['helmet', 'clock', 'shovel', 'star', 'grenade', 'tank'];
+  var POWERS = ['helmet', 'clock', 'shovel', 'star', 'grenade', 'tank', 'ship'];
+  var VS_POWERS = ['helmet', 'star', 'ship', 'clock'];
+  var VS_SPAWN = [[96, 192, 0], [96, 0, 2]];   // versus: player 1 at the bottom, player 2 at the top
+  var VS_TARGET = 5;                            // versus: first to this many wins
   var STAGES = BC.LEVELS.length;
   var GREY = '#636363';
 
@@ -31,7 +34,7 @@ var BC = window.BC || (window.BC = {});
   var sceneT = 0;
   var G = null;          // the current game
   var menu = { sel: 0, stage: 1 };
-  var save = { best: 1, hi: 20000, muted: false };
+  var save = { best: 1, hi: 20000, muted: false, surv: null };
 
   function rnd(n) { return Math.floor(Math.random() * n); }
   function playerPal(i) { return i ? 'p2' : 'p1'; }
@@ -46,6 +49,7 @@ var BC = window.BC || (window.BC = {});
         if (o.best) save.best = Math.max(1, Math.min(STAGES, o.best | 0));
         if (o.hi) save.hi = o.hi | 0;
         save.muted = !!o.muted;
+        if (o.surv && o.surv.kills >= 0) save.surv = o.surv;
       } catch (e) { /* ignore */ }
     }
     menu.stage = save.best;
@@ -64,10 +68,14 @@ var BC = window.BC || (window.BC = {});
     BC.platform.broadcast(s === 'play' ? 'mode:game' : 'mode:menu');
   }
 
-  function newGame(mode, stage) {
+  // kind: 'campaign' (the 100 stages), 'survival' (endless waves) or 'versus' (player 1 v player 2)
+  function newGame(mode, stage, kind) {
+    kind = kind || 'campaign';
     G = {
+      kind: kind,
       mode: mode,
       stage: stage,
+      arena: kind === 'campaign' ? stage : 1 + rnd(STAGES),
       players: [mkPlayer(0), mode === 2 ? mkPlayer(1) : null]
     };
     startIntro();
@@ -86,6 +94,7 @@ var BC = window.BC || (window.BC = {});
   }
 
   function restartStage() {
+    if (G.kind !== 'campaign') { newGame(G.mode, G.stage, G.kind); return; }
     G.players.forEach(function (P, i) {
       if (!P) return;
       var s = G.snapshot[i];
@@ -96,7 +105,7 @@ var BC = window.BC || (window.BC = {});
 
   // ------------------------------------------------------------------ stage setup
   function buildStage() {
-    var L = BC.LEVELS[(G.stage - 1) % STAGES];
+    var L = BC.LEVELS[((G.kind === 'campaign' ? G.stage : G.arena) - 1) % STAGES];
     G.map = new Uint8Array(N * N);
     G.bq = new Uint8Array(N * N);   // brick quarters left: 1 top-left, 2 top-right, 4 bottom-left, 8 bottom-right
     G.water = [];
@@ -114,8 +123,21 @@ var BC = window.BC || (window.BC = {});
       if (v === TREES) tctx.drawImage(BC.CELLS.trees, cx * 8, cy * 8);
       drawCell(cx, cy);
     }
-    G.queue = L.o;
+    G.queue = G.kind === 'campaign' ? L.o : '';
     G.qi = 0;
+    G.noBase = G.kind === 'versus';
+    if (G.noBase) {
+      // no eagle in versus: clear its brick ring so the bottom spawn is open
+      for (var r = 0; r < RING.length; r++) setCell(RING[r][0], RING[r][1], EMPTY);
+    }
+    G.vs = [0, 0];
+    G.winner = -1;
+    G.vsPowerTimer = 420;
+    G.wave = 1;
+    G.waveKills = 0;
+    G.kills = 0;
+    G.time = 0;
+    G.banner = null;
     G.tanks = [];
     G.bullets = [];
     G.fx = [];
@@ -125,22 +147,15 @@ var BC = window.BC || (window.BC = {});
     G.shovel = 0;
     G.spawnIdx = 0;
     G.spawnTimer = 30;
-    G.baseAlive = true;
+    G.baseAlive = !G.noBase;
     G.lost = false;
     G.endTimer = 0;
     G.overTimer = 0;
     G.frame = 0;
     G.paused = false;
     G.pauseSel = 0;
-    var s = G.stage;
-    // The first ten stages are gentler: slower, calmer enemies, fewer at a time.
-    var ease = Math.max(0, 1 - (s - 1) / 10);   // 1 on stage 1, 0 from stage 11
-    G.ease = ease;
-    G.speedMul = (1 + Math.min(0.3, s * 0.003)) * (1 - 0.25 * ease);
-    G.smart = Math.min(0.75, 0.12 + s * 0.0065) * (1 - 0.6 * ease);
-    G.fireChance = Math.min(0.045, 0.008 + s * 0.0004) * (1 - 0.5 * ease);
-    G.spawnInterval = Math.max(70, 190 - s * 1.3) * (1 + 0.6 * ease) * (G.mode === 2 ? 0.8 : 1);
-    G.maxOnField = (s <= 3 ? 2 : s <= 7 ? 3 : 4) + (G.mode === 2 ? 2 : 0);
+    if (G.kind === 'survival') setWave(1);
+    else setDifficulty(G.stage, Math.max(0, 1 - (G.stage - 1) / 10));
     G.players.forEach(function (P) {
       if (!P) return;
       P.kills = [0, 0, 0, 0];
@@ -148,6 +163,33 @@ var BC = window.BC || (window.BC = {});
       P.respawn = 0;
       if (!P.out) spawnPlayer(P);
     });
+  }
+
+  // Enemy strength for a stage number. ease (0-1) makes things gentler (the first stages).
+  function setDifficulty(s, ease) {
+    G.ease = ease;
+    G.diff = s;
+    G.speedMul = (1 + Math.min(0.3, s * 0.003)) * (1 - 0.25 * ease);
+    G.smart = Math.min(0.75, 0.12 + s * 0.0065) * (1 - 0.6 * ease);
+    G.fireChance = Math.min(0.045, 0.008 + s * 0.0004) * (1 - 0.5 * ease);
+    G.spawnInterval = Math.max(70, 190 - s * 1.3) * (1 + 0.6 * ease) * (G.mode === 2 ? 0.8 : 1);
+    G.maxOnField = (s <= 3 ? 2 : s <= 7 ? 3 : 4) + (G.mode === 2 ? 2 : 0);
+  }
+
+  // Survival: every 10 kills a new wave; each wave counts like five more stages.
+  function setWave(w) {
+    G.wave = w;
+    setDifficulty(1 + (w - 1) * 5, Math.max(0, 1 - (w - 1) / 4));
+    G.maxOnField = Math.min(6, 2 + ((w - 1) >> 1)) + (G.mode === 2 ? 2 : 0);
+  }
+
+  function survivalEnemy() {
+    var w = G.wave, r = Math.random();
+    var armour = Math.min(0.35, w * 0.03), power = Math.min(0.3, w * 0.03), fast = Math.min(0.3, 0.1 + w * 0.02);
+    if (r < armour) return 'a';
+    if (r < armour + power) return 'p';
+    if (r < armour + power + fast) return 'f';
+    return 'b';
   }
 
   function drawCell(cx, cy) {
@@ -202,8 +244,14 @@ var BC = window.BC || (window.BC = {});
   function spawnPlayer(P) {
     var t = newTank(true);
     t.pi = P.i;
-    t.x = PLAYER_SPAWN[P.i][0];
-    t.y = PLAYER_SPAWN[P.i][1];
+    if (G.kind === 'versus') {
+      t.x = VS_SPAWN[P.i][0];
+      t.y = VS_SPAWN[P.i][1];
+      t.dir = VS_SPAWN[P.i][2];
+    } else {
+      t.x = PLAYER_SPAWN[P.i][0];
+      t.y = PLAYER_SPAWN[P.i][1];
+    }
     applyLevel(t, P.level);
     P.tank = t;
     G.tanks.push(t);
@@ -224,6 +272,8 @@ var BC = window.BC || (window.BC = {});
   }
 
   function spawnEnemy() {
+    if (G.kind === 'versus') return true;
+    if (G.kind === 'survival' && G.qi >= G.queue.length) G.queue += survivalEnemy();
     if (G.qi >= G.queue.length) return true;
     if (enemiesOnField() >= G.maxOnField) return false;
     for (var k = 0; k < 3; k++) {
@@ -239,8 +289,8 @@ var BC = window.BC || (window.BC = {});
       t.hp = spec.hp;
       t.speed = spec.speed * G.speedMul;
       t.bspeed = spec.bspeed;
-      t.maxBullets = (G.stage > 60 && t.etype >= 2) ? 2 : 1;
-      t.bonus = G.qi === 3 || G.qi === 10 || G.qi === 17;
+      t.maxBullets = (G.diff > 60 && t.etype >= 2) ? 2 : 1;
+      t.bonus = G.kind === 'survival' ? G.qi % 7 === 3 : (G.qi === 3 || G.qi === 10 || G.qi === 17);
       t.ai = 30;
       t.fireCd = 45 + Math.round(60 * G.ease);
       if (t.bonus) G.power = null;
@@ -252,14 +302,15 @@ var BC = window.BC || (window.BC = {});
     return false;
   }
 
-  function terrainBlocks(x, y) {
+  function terrainBlocks(x, y, t) {
+    var ship = t && t.ship;
     if (x < 0 || y < 0 || x > 192 || y > 192) return true;
     var x0 = Math.floor(x / 8), y0 = Math.floor(y / 8);
     var x1 = Math.floor((x + 15.99) / 8), y1 = Math.floor((y + 15.99) / 8);
     for (var cy = y0; cy <= y1; cy++) {
       for (var cx = x0; cx <= x1; cx++) {
         var v = G.map[cy * N + cx];
-        if (v === STEEL || v === WATER) return true;
+        if (v === STEEL || (v === WATER && !ship)) return true;
         if (v === BRICK) {
           var m = G.bq[cy * N + cx];
           if (m === 15) return true;
@@ -269,7 +320,7 @@ var BC = window.BC || (window.BC = {});
             if (qx < x + 16 && qx + 4 > x && qy < y + 16 && qy + 4 > y) return true;
           }
         }
-        if (cx >= 12 && cx <= 13 && cy >= 24) return true; // the eagle
+        if (!G.noBase && cx >= 12 && cx <= 13 && cy >= 24) return true; // the eagle
       }
     }
     return false;
@@ -287,12 +338,12 @@ var BC = window.BC || (window.BC = {});
 
   function moveTank(t, dist) {
     var moved = false;
-    var stuck = terrainBlocks(t.x, t.y); // e.g. bricks restored on top of a tank
+    var stuck = terrainBlocks(t.x, t.y, t); // e.g. bricks restored on top of a tank
     while (dist > 0.0001) {
       var s = Math.min(dist, 0.5);
       var nx = t.x + DX[t.dir] * s, ny = t.y + DY[t.dir] * s;
       if (nx < 0 || ny < 0 || nx > 192 || ny > 192) break;
-      if ((!stuck && terrainBlocks(nx, ny)) || tankBlocks(t, nx, ny)) break;
+      if ((!stuck && terrainBlocks(nx, ny, t)) || tankBlocks(t, nx, ny)) break;
       t.x = nx;
       t.y = ny;
       dist -= s;
@@ -309,6 +360,13 @@ var BC = window.BC || (window.BC = {});
       else t.x = Math.round(t.x / 8) * 8;
     }
     t.dir = d;
+  }
+
+  function overWater(t) {
+    var x0 = Math.floor(t.x / 8), y0 = Math.floor(t.y / 8);
+    var x1 = Math.floor((t.x + 15.99) / 8), y1 = Math.floor((t.y + 15.99) / 8);
+    for (var cy = y0; cy <= y1; cy++) for (var cx = x0; cx <= x1; cx++) if (G.map[cy * N + cx] === WATER) return true;
+    return false;
   }
 
   function onIce(t) {
@@ -345,7 +403,8 @@ var BC = window.BC || (window.BC = {});
     if (!t) {
       if (G.lost) return;
       if (P.respawn > 0) { P.respawn--; return; }
-      if (P.lives > 0) { P.lives--; spawnPlayer(P); }
+      if (G.kind === 'versus') { if (G.winner < 0) spawnPlayer(P); }
+      else if (P.lives > 0) { P.lives--; spawnPlayer(P); }
       else { P.out = true; checkAllOut(); }
       return;
     }
@@ -409,7 +468,7 @@ var BC = window.BC || (window.BC = {});
       if (t.blocked > 0) chance *= 4;
       var aim = aimed(t);
       if (aim === 2) chance *= 6;
-      else if (aim === 1) chance *= G.stage < 20 ? 2 : 3;
+      else if (aim === 1) chance *= G.diff < 20 ? 2 : 3;
       if (Math.random() < chance && fire(t)) t.fireCd = 18;
     }
   }
@@ -460,6 +519,11 @@ var BC = window.BC || (window.BC = {});
     b.owner.bulletsOut = Math.max(0, b.owner.bulletsOut - 1);
   }
 
+  function team(b) {
+    if (!b.player) return 'enemy';
+    return G.kind === 'versus' ? 'p' + b.owner.pi : 'players';
+  }
+
   function updateBullet(b) {
     var steps = Math.ceil(b.speed);
     var step = b.speed / steps;
@@ -486,6 +550,11 @@ var BC = window.BC || (window.BC = {});
       if (t.dead || t === b.owner || t.spawn > 0) continue;
       if (b.x < t.x - 1 || b.x >= t.x + 17 || b.y < t.y - 1 || b.y >= t.y + 17) continue;
       if (!b.player && !t.isPlayer) continue;          // enemy shells pass enemies
+      if (b.player && t.isPlayer && G.kind === 'versus') {
+        boom(b.x, b.y, false);
+        if (t.shield <= 0) hitPlayer(t, b.owner);
+        return true;
+      }
       if (b.player && t.isPlayer) {                     // friendly fire freezes
         if (t.shield <= 0) t.frozen = 150;
         boom(b.x, b.y, false);
@@ -498,7 +567,7 @@ var BC = window.BC || (window.BC = {});
     }
     for (var j = 0; j < G.bullets.length; j++) {
       var o = G.bullets[j];
-      if (o === b || o.dead || o.player === b.player) continue;
+      if (o === b || o.dead || team(o) === team(b)) continue;
       if (Math.abs(o.x - b.x) < 4 && Math.abs(o.y - b.y) < 4) {
         killBullet(o);
         return true;
@@ -559,7 +628,7 @@ var BC = window.BC || (window.BC = {});
 
   // ------------------------------------------------------------------ damage
   function damage(t, by) {
-    if (t.isPlayer) { killPlayer(t); return; }
+    if (t.isPlayer) { hitPlayer(t, by); return; }
     if (t.bonus) { t.bonus = false; spawnPower(); }
     t.hp--;
     if (t.hp > 0) { sfx('hit'); return; }
@@ -572,6 +641,29 @@ var BC = window.BC || (window.BC = {});
       P.kills[t.etype]++;
       addScore(P, pts);
       G.popups.push({ x: t.x + 8, y: t.y + 5, text: String(pts), t: 50 });
+    }
+  }
+
+  // A player is hit: a ship takes the hit instead (unless the tank is out on the water).
+  function hitPlayer(t, by) {
+    if (t.ship) {
+      t.ship = false;
+      if (!overWater(t)) {
+        t.shield = Math.max(t.shield, 60);
+        sfx('hit');
+        BC.platform.toPhone(t.pi + 1, 'buzz:150');
+        return;
+      }
+    }
+    killPlayer(t);
+    if (G.kind === 'versus' && by && by.isPlayer && by.pi !== t.pi && G.winner < 0) {
+      G.vs[by.pi]++;
+      G.popups.push({ x: t.x + 8, y: t.y + 5, text: '+1', t: 60 });
+      if (G.vs[by.pi] >= VS_TARGET) {
+        G.winner = by.pi;
+        G.overTimer = 180;
+        sfx('clear');
+      }
     }
   }
 
@@ -622,14 +714,15 @@ var BC = window.BC || (window.BC = {});
   }
 
   // ------------------------------------------------------------------ power-ups
-  function spawnPower() {
+  function spawnPower(kinds) {
     var x, y, tries = 0;
     do {
       x = rnd(25) * 8;
       y = rnd(23) * 8;
       tries++;
     } while (tries < 30 && Math.abs(x - BASE_X) < 24 && y > 168);
-    G.power = { kind: POWERS[rnd(POWERS.length)], x: Math.min(192, x), y: Math.min(192, y), t: 0 };
+    kinds = kinds || POWERS;
+    G.power = { kind: kinds[rnd(kinds.length)], x: Math.min(192, x), y: Math.min(192, y), t: 0 };
     sfx('bonus');
   }
 
@@ -637,7 +730,10 @@ var BC = window.BC || (window.BC = {});
     addScore(P, 500);
     G.popups.push({ x: t.x + 8, y: t.y + 5, text: '500', t: 50 });
     if (kind === 'helmet') t.shield = 600;
-    else if (kind === 'clock') G.freeze = 600;
+    else if (kind === 'clock' && G.kind === 'versus') {
+      G.players.forEach(function (Q) { if (Q && Q !== P && Q.tank) Q.tank.frozen = 240; });
+    } else if (kind === 'clock') G.freeze = 600;
+    else if (kind === 'ship') t.ship = true;
     else if (kind === 'shovel') { G.shovel = 1200; if (G.baseAlive) setRing(STEEL); }
     else if (kind === 'star') { P.level = Math.min(3, P.level + 1); applyLevel(t, P.level); }
     else if (kind === 'grenade') {
@@ -698,7 +794,16 @@ var BC = window.BC || (window.BC = {});
     }
     for (i = 0; i < G.bullets.length; i++) if (!G.bullets[i].dead) updateBullet(G.bullets[i]);
     G.bullets = G.bullets.filter(function (b) { return !b.dead; });
-    G.tanks = G.tanks.filter(function (t) { return !t.dead; });
+    G.tanks = G.tanks.filter(function (t) {
+      if (t.dead && !t.isPlayer) enemyGone();
+      return !t.dead;
+    });
+    if (G.kind === 'survival' && !G.lost) G.time++;
+    if (G.kind === 'versus' && G.winner < 0 && !G.power && --G.vsPowerTimer <= 0) {
+      G.vsPowerTimer = 600;
+      spawnPower(VS_POWERS);
+    }
+    if (G.banner && --G.banner.t <= 0) G.banner = null;
     if (G.power) {
       G.power.t++;
       if (G.power.t > 60 * 25) G.power = null;
@@ -708,12 +813,27 @@ var BC = window.BC || (window.BC = {});
     for (i = 0; i < G.popups.length; i++) { G.popups[i].t--; G.popups[i].y -= 0.15; }
     G.popups = G.popups.filter(function (p) { return p.t > 0; });
 
-    if (G.lost) {
+    if (G.kind === 'versus') {
+      if (G.winner >= 0 && --G.overTimer <= 0) { go('vsend'); }
+    } else if (G.lost) {
       if (--G.overTimer <= 0) finishStage(false);
+    } else if (G.kind === 'survival') {
+      // endless
     } else if (!G.endTimer && G.qi >= G.queue.length && enemiesOnField() === 0) {
       G.endTimer = 150;
     } else if (G.endTimer && --G.endTimer <= 0) {
       finishStage(true);
+    }
+  }
+
+  function enemyGone() {
+    if (G.kind !== 'survival') return;
+    G.kills++;
+    if (++G.waveKills >= 10) {
+      G.waveKills = 0;
+      setWave(G.wave + 1);
+      G.banner = { text: 'WAVE ' + G.wave, t: 120 };
+      sfx('bonus');
     }
   }
 
@@ -736,6 +856,14 @@ var BC = window.BC || (window.BC = {});
   function finishStage(cleared) {
     G.result = cleared ? 'clear' : 'over';
     G.players.forEach(function (P) { if (P && P.score > save.hi) save.hi = P.score; });
+    if (G.kind === 'survival') {
+      G.record = !save.surv || G.kills > save.surv.kills;
+      if (G.record) save.surv = { wave: G.wave, kills: G.kills, time: G.time };
+      writeSave();
+      go('survend');
+      sfx('over');
+      return;
+    }
     if (cleared) {
       save.best = Math.max(save.best, Math.min(STAGES, G.stage + 1));
       menu.stage = Math.min(STAGES, G.stage + 1);
@@ -747,7 +875,8 @@ var BC = window.BC || (window.BC = {});
   }
 
   // ------------------------------------------------------------------ other scenes
-  var TITLE_ITEMS = ['1 PLAYER', '2 PLAYERS', 'STAGE', 'PHONE CONTROLLER', 'SOUND'];
+  var TITLE_ITEMS = ['1 PLAYER', '2 PLAYERS', 'SURVIVAL', 'VERSUS', 'STAGE', 'PHONE CONTROLLER', 'SOUND'];
+  var M_SURV = 2, M_VS = 3, M_STAGE = 4, M_PHONE = 5, M_SOUND = 6;
 
   function updateTitle() {
     var navs = BC.input.takeNav();
@@ -755,20 +884,22 @@ var BC = window.BC || (window.BC = {});
       var b = navs[n].b;
       if (b === 'up') { menu.sel = (menu.sel + TITLE_ITEMS.length - 1) % TITLE_ITEMS.length; sfx('move'); }
       else if (b === 'down') { menu.sel = (menu.sel + 1) % TITLE_ITEMS.length; sfx('move'); }
-      else if ((b === 'left' || b === 'right') && menu.sel === 2) {
+      else if ((b === 'left' || b === 'right') && menu.sel === M_STAGE) {
         var d = b === 'left' ? -1 : 1;
         menu.stage += d;
         if (menu.stage < 1) menu.stage = save.best;
         if (menu.stage > save.best) menu.stage = 1;
         sfx('move');
-      } else if ((b === 'left' || b === 'right') && menu.sel === 4) {
+      } else if ((b === 'left' || b === 'right') && menu.sel === M_SOUND) {
         toggleSound();
       } else if (b === 'ok') {
         BC.audio.unlock();
         if (menu.sel === 0 || menu.sel === 1) { sfx('select'); newGame(menu.sel + 1, menu.stage); return; }
-        if (menu.sel === 2) { menu.stage = menu.stage >= save.best ? 1 : menu.stage + 1; sfx('move'); }
-        if (menu.sel === 3) { sfx('select'); go('connect'); return; }
-        if (menu.sel === 4) toggleSound();
+        if (menu.sel === M_SURV) { sfx('select'); newGame(BC.phones[2] ? 2 : 1, 1, 'survival'); return; }
+        if (menu.sel === M_VS) { sfx('select'); newGame(2, 1, 'versus'); return; }
+        if (menu.sel === M_STAGE) { menu.stage = menu.stage >= save.best ? 1 : menu.stage + 1; sfx('move'); }
+        if (menu.sel === M_PHONE) { sfx('select'); go('connect'); return; }
+        if (menu.sel === M_SOUND) toggleSound();
       } else if (b === 'back') {
         BC.platform.exit();
       }
@@ -831,6 +962,7 @@ var BC = window.BC || (window.BC = {});
       return;
     }
     if (t.isPlayer && t.frozen > 0 && (G.frame >> 3) & 1) return;
+    if (t.ship) ctx.drawImage(BC.SHIP, x - 1, y - 1);
     var pal, kind;
     if (t.isPlayer) { pal = playerPal(t.pi); kind = 'pl'; }
     else {
@@ -854,7 +986,7 @@ var BC = window.BC || (window.BC = {});
     ctx.rect(FX, FY, 208, 208);
     ctx.clip();
     ctx.drawImage(G.ground, FX, FY);
-    ctx.drawImage(G.baseAlive ? BC.EAGLE : BC.EAGLE_DEAD, FX + BASE_X, FY + BASE_Y);
+    if (!G.noBase) ctx.drawImage(G.baseAlive ? BC.EAGLE : BC.EAGLE_DEAD, FX + BASE_X, FY + BASE_Y);
     var i;
     for (i = 0; i < G.tanks.length; i++) drawTank(ctx, G.tanks[i]);
     ctx.fillStyle = '#e8e8e8';
@@ -877,6 +1009,13 @@ var BC = window.BC || (window.BC = {});
       var p = G.popups[i];
       BC.text(ctx, p.text, FX + p.x, FY + p.y, '#fcfcfc', 1, 'center');
     }
+    if (G.banner && (G.banner.t >> 3) & 1) {
+      BC.text(ctx, G.banner.text, FX + 104, FY + 90, '#f8d038', 2, 'center');
+    }
+    if (G.kind === 'versus' && G.winner >= 0) {
+      BC.text(ctx, 'PLAYER ' + (G.winner + 1), FX + 104, FY + 84, BC.PAL[playerPal(G.winner)].l, 2, 'center');
+      BC.text(ctx, 'WINS!', FX + 104, FY + 102, BC.PAL[playerPal(G.winner)].l, 2, 'center');
+    }
     if (G.lost) {
       var y = Math.max(90, 208 - (220 - G.overTimer) * 1.2);
       BC.text(ctx, 'GAME', FX + 104, FY + y, '#e8503c', 2, 'center');
@@ -888,6 +1027,7 @@ var BC = window.BC || (window.BC = {});
   }
 
   function drawPanels(ctx) {
+    if (G.kind === 'versus') { drawVersusPanels(ctx); return; }
     // left: scores and lives
     BC.text(ctx, 'HI', 8, 8, '#fcfcfc');
     BC.text(ctx, String(save.hi), 80, 8, '#fcfcfc', 1, 'right');
@@ -902,16 +1042,50 @@ var BC = window.BC || (window.BC = {});
       BC.text(ctx, 'x ' + P.lives, 20, y + 12, '#000');
       if (P.level > 0) BC.text(ctx, 'STAR ' + P.level, 80, y + 12, '#fcfcfc', 1, 'right');
     }
-    ctx.drawImage(BC.ICON_FLAG, 8, 150);
-    BC.text(ctx, 'STAGE', 28, 152, '#000');
-    BC.text(ctx, String(G.stage), 28, 164, '#000', 2);
-    if (G.freeze > 0) BC.text(ctx, 'FREEZE', 8, 196, '#fcfcfc');
-
-    // right: enemies left, phone QR
-    var left = G.queue.length - G.qi;
-    for (var k = 0; k < left; k++) {
-      ctx.drawImage(BC.ICON_ENEMY, 308 + (k % 2) * 10, 8 + ((k / 2) | 0) * 9);
+    if (G.kind === 'survival') {
+      BC.text(ctx, 'WAVE', 8, 120, '#000');
+      BC.text(ctx, String(G.wave), 8, 132, '#fcfcfc', 2);
+      BC.text(ctx, 'TANKS ' + G.kills, 8, 156, '#000');
+      BC.text(ctx, 'TIME ' + clock(G.time), 8, 170, '#000');
+    } else {
+      ctx.drawImage(BC.ICON_FLAG, 8, 150);
+      BC.text(ctx, 'STAGE', 28, 152, '#000');
+      BC.text(ctx, String(G.stage), 28, 164, '#000', 2);
+      // right: enemies left
+      var left = G.queue.length - G.qi;
+      for (var k = 0; k < left; k++) {
+        ctx.drawImage(BC.ICON_ENEMY, 308 + (k % 2) * 10, 8 + ((k / 2) | 0) * 9);
+      }
     }
+    if (G.freeze > 0) BC.text(ctx, 'FREEZE', 8, 196, '#fcfcfc');
+    drawPhoneCode(ctx);
+  }
+
+  function clock(frames) {
+    var sec = Math.floor(frames / 60);
+    var m = Math.floor(sec / 60), r = sec % 60;
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+
+  function drawVersusPanels(ctx) {
+    BC.text(ctx, 'VERSUS', 44, 8, '#fcfcfc', 1, 'center');
+    BC.text(ctx, 'FIRST TO ' + VS_TARGET, 44, 18, '#000', 1, 'center');
+    for (var i = 0; i < 2; i++) {
+      var y = 40 + i * 56;
+      var pal = BC.PAL[playerPal(i)];
+      BC.text(ctx, 'PLAYER ' + (i + 1), 8, y, pal.l);
+      BC.text(ctx, String(G.vs[i]), 8, y + 12, pal.m, 3);
+      for (var k = 0; k < VS_TARGET; k++) {
+        ctx.fillStyle = k < G.vs[i] ? pal.m : '#4a4a4a';
+        ctx.fillRect(34 + k * 9, y + 16, 7, 7);
+      }
+      var P = G.players[i];
+      if (P && P.level > 0) BC.text(ctx, 'STAR ' + P.level, 8, y + 38, '#fcfcfc');
+    }
+    drawPhoneCode(ctx);
+  }
+
+  function drawPhoneCode(ctx) {
     var addr = BC.platform.address();
     if (addr) {
       var needP2 = G.mode === 2 && !BC.phones[2];
@@ -933,7 +1107,8 @@ var BC = window.BC || (window.BC = {});
     BC.text(ctx, 'PAUSED', 192, 68, '#e8503c', 2, 'center');
     for (var i = 0; i < PAUSE_ITEMS.length; i++) {
       var sel = i === G.pauseSel;
-      BC.text(ctx, PAUSE_ITEMS[i], 150, 96 + i * 16, sel ? '#fcfcfc' : '#8c8c8c');
+      var item = (i === 1 && G.kind !== 'campaign') ? 'RESTART' : PAUSE_ITEMS[i];
+      BC.text(ctx, item, 150, 96 + i * 16, sel ? '#fcfcfc' : '#8c8c8c');
       if (sel) ctx.drawImage(BC.tankSprite('pl', 'p1', 1, ((sceneT >> 2) % 3)), 128, 92 + i * 16);
     }
   }
@@ -945,14 +1120,18 @@ var BC = window.BC || (window.BC = {});
     BC.brickText(ctx, 'CITY', W / 2, 46, 4, 'center');
     for (var i = 0; i < TITLE_ITEMS.length; i++) {
       var label = TITLE_ITEMS[i];
-      if (i === 2) label = 'STAGE  < ' + menu.stage + ' >';
-      if (i === 4) label = 'SOUND  ' + (save.muted ? 'OFF' : 'ON');
+      if (i === M_STAGE) label = 'STAGE  < ' + menu.stage + ' >';
+      if (i === M_SOUND) label = 'SOUND  ' + (save.muted ? 'OFF' : 'ON');
       var sel = i === menu.sel;
-      var y = 92 + i * 15;
+      var y = 80 + i * 12;
       BC.text(ctx, label, 150, y, sel ? '#fcfcfc' : '#9c9c9c');
       if (sel) ctx.drawImage(BC.tankSprite('pl', 'p1', 1, ((sceneT >> 2) % 3)), 126, y - 4);
     }
-    if (menu.sel === 2) BC.text(ctx, 'LEFT/RIGHT TO CHANGE. REACHED: ' + save.best + ' OF ' + STAGES, W / 2, 172, '#9c9c9c', 1, 'center');
+    var hint = '';
+    if (menu.sel === M_STAGE) hint = 'LEFT/RIGHT TO CHANGE. REACHED: ' + save.best + ' OF ' + STAGES;
+    else if (menu.sel === M_SURV) hint = save.surv ? 'ENDLESS WAVES. BEST: WAVE ' + save.surv.wave + ', ' + save.surv.kills + ' TANKS' : 'ENDLESS WAVES OF TANKS. HOW LONG CAN YOU LAST?';
+    else if (menu.sel === M_VS) hint = 'PLAYER 1 V PLAYER 2. FIRST TO ' + VS_TARGET + ' WINS. P2 USES A PHONE';
+    if (hint) BC.text(ctx, hint, W / 2, 172, '#9c9c9c', 1, 'center');
     BC.text(ctx, 'HI-SCORE  ' + save.hi, W / 2, 184, '#e8503c', 1, 'center');
     var ph = [];
     if (BC.phones[1]) ph.push('P1');
@@ -996,7 +1175,10 @@ var BC = window.BC || (window.BC = {});
   function drawIntro(ctx) {
     ctx.fillStyle = GREY;
     ctx.fillRect(0, 0, W, H);
-    BC.text(ctx, 'STAGE ' + G.stage, W / 2, 96, '#000', 2, 'center');
+    var title = G.kind === 'survival' ? 'SURVIVAL' : G.kind === 'versus' ? 'VERSUS' : 'STAGE ' + G.stage;
+    BC.text(ctx, title, W / 2, 96, '#000', 2, 'center');
+    if (G.kind === 'survival') BC.text(ctx, 'DEFEND THE EAGLE. A NEW WAVE EVERY 10 TANKS.', W / 2, 116, '#000', 1, 'center');
+    if (G.kind === 'versus') BC.text(ctx, 'FIRST TO ' + VS_TARGET + ' HITS WINS', W / 2, 116, '#000', 1, 'center');
     if (G.mode === 2 && !BC.phones[2] && BC.platform.tv) {
       BC.text(ctx, 'PLAYER 2: CONNECT A PHONE (SEE THE CODE ON THE RIGHT)', W / 2, 130, '#000', 1, 'center');
     }
@@ -1047,6 +1229,30 @@ var BC = window.BC || (window.BC = {});
     if (sceneT > 40) BC.text(ctx, 'PRESS OK', W / 2, 180, '#9c9c9c', 1, 'center');
   }
 
+  function drawVsEnd(ctx) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    var w = Math.max(0, G.winner);
+    var pal = BC.PAL[playerPal(w)];
+    BC.brickText(ctx, 'P' + (w + 1), W / 2, 24, 4, 'center');
+    BC.brickText(ctx, 'WINS', W / 2, 60, 4, 'center');
+    BC.text(ctx, 'PLAYER 1  ' + G.vs[0] + ' - ' + G.vs[1] + '  PLAYER 2', W / 2, 120, pal.l, 1, 'center');
+    if (sceneT > 40) BC.text(ctx, 'PRESS OK', W / 2, 180, '#9c9c9c', 1, 'center');
+  }
+
+  function drawSurvEnd(ctx) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    BC.brickText(ctx, 'GAME', W / 2, 16, 4, 'center');
+    BC.brickText(ctx, 'OVER', W / 2, 50, 4, 'center');
+    BC.text(ctx, 'YOU REACHED WAVE ' + G.wave, W / 2, 98, '#fcfcfc', 1, 'center');
+    BC.text(ctx, 'TANKS DESTROYED ' + G.kills, W / 2, 112, '#fcfcfc', 1, 'center');
+    BC.text(ctx, 'TIME ' + clock(G.time), W / 2, 126, '#fcfcfc', 1, 'center');
+    if (G.record) BC.text(ctx, 'NEW RECORD!', W / 2, 146, '#f8d038', 2, 'center');
+    else if (save.surv) BC.text(ctx, 'RECORD: WAVE ' + save.surv.wave + ', ' + save.surv.kills + ' TANKS', W / 2, 150, '#e8503c', 1, 'center');
+    if (sceneT > 40) BC.text(ctx, 'PRESS OK', W / 2, 186, '#9c9c9c', 1, 'center');
+  }
+
   function drawWin(ctx) {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
@@ -1075,7 +1281,7 @@ var BC = window.BC || (window.BC = {});
         case 'intro': updateIntro(); break;
         case 'play': updatePlay(); break;
         case 'tally': updateTally(); break;
-        case 'over': case 'win': updateEnd(); break;
+        case 'over': case 'win': case 'vsend': case 'survend': updateEnd(); break;
       }
     },
     render: function (ctx) {
@@ -1087,6 +1293,8 @@ var BC = window.BC || (window.BC = {});
         case 'tally': drawTally(ctx); break;
         case 'over': drawOver(ctx); break;
         case 'win': drawWin(ctx); break;
+        case 'vsend': drawVsEnd(ctx); break;
+        case 'survend': drawSurvEnd(ctx); break;
       }
     },
     // Pause when the app goes to the background.
@@ -1104,6 +1312,8 @@ var BC = window.BC || (window.BC = {});
       state: function () { return G; },
       unlockAll: function () { save.best = STAGES; menu.stage = 1; },
       startStage: function (mode, stage) { newGame(mode, stage); buildStage(); go('play'); },
+      startMode: function (kind, mode) { newGame(mode, 1, kind); buildStage(); go('play'); },
+      hitPlayer: function (i, byI) { var a = G.players[i].tank, b = G.players[byI] && G.players[byI].tank; hitPlayer(a, b); },
       killEnemies: function () {
         G.qi = G.queue.length;
         G.tanks.forEach(function (t) { if (!t.isPlayer) t.dead = true; });

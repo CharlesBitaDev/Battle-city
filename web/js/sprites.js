@@ -297,6 +297,36 @@ var BC = window.BC || (window.BC = {});
     ], PU_COL)
   };
 
+  BC.POWER.ship = fromMap([
+    '',
+    '       #',
+    '       #o#',
+    '       #oo#',
+    '       #ooo#',
+    '       #oooo#',
+    '       #',
+    ' ##############',
+    ' #oooooooooooo#',
+    '  #oooooooooo#',
+    '   ##########',
+    '',
+    ' o  o  o  o  o',
+    'o oo oo oo oo o'
+  ], PU_COL);
+
+  // Boat hull drawn under a tank that has the ship power-up (18x18, centred on the tank).
+  BC.SHIP = (function () {
+    var c = canvas(18, 18);
+    var x = c.getContext('2d');
+    x.fillStyle = '#f8f8f8';
+    x.fillRect(2, 0, 14, 18); x.fillRect(0, 2, 18, 14); x.fillRect(1, 1, 16, 16);
+    x.fillStyle = '#8c4a1c';
+    x.fillRect(2, 1, 14, 16); x.fillRect(1, 2, 16, 14);
+    x.fillStyle = '#5c2c0c';
+    for (var yy = 3; yy < 16; yy += 3) x.fillRect(1, yy, 16, 1);
+    return c;
+  })();
+
   // ---- small icons ----
   BC.ICON_ENEMY = fromMap([
     '#  #  #',

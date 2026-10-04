@@ -28,11 +28,17 @@ Full link:
 
 To update, install the new file over the old one. Your progress and high score are kept.
 
+## Game modes
+
+- **1 Player / 2 Players**: the 100 stages. Defend the eagle and destroy 20 tanks per stage.
+- **Survival**: endless waves around the eagle. Every 10 tanks destroyed starts a harder wave. The game keeps your best wave and tank count. If a phone is connected as Player 2, you play it together.
+- **Versus**: Player 1 against Player 2 on a random map with no enemies or eagle. The first to 5 hits wins. Power-ups appear every 10 seconds, and the clock freezes your opponent.
+
 ## What's in the game
 
 - Bricks (shoot through them), steel (needs a 3-star tank), water, trees to hide under and ice that makes tanks slide.
 - Four enemy types: basic, fast, power (fast shells) and armoured (four hits). Flashing red tanks drop a power-up when hit:
-  helmet (shield), clock (freezes enemies), shovel (steel walls around the base), star (tank upgrade), grenade (destroys every enemy on screen) and tank (extra life).
+  helmet (shield), clock (freezes enemies), shovel (steel walls around the base), star (tank upgrade), grenade (destroys every enemy on screen), tank (extra life) and ship (drive across water; the boat also takes one hit for you, unless you are out on the water).
 - Stages get harder: more armoured tanks, faster and smarter enemies, and more steel.
 - The game remembers the highest stage reached. Choose any stage up to it on the title screen.
 
