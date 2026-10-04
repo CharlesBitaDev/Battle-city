@@ -215,17 +215,18 @@ BC.audio = (function () {
   var GAP = { shoot: 0.03, eshoot: 0.08, brick: 0.04, steel: 0.04, hit: 0.04, boom: 0.06, bigboom: 0.1 };
 
   // ------------------------------------------------------------------ engine
-  // A low buzzing pulse whose pitch flips every two frames, like the console's tank engine.
+  // A low buzzing pulse whose pitch rocks up and down 8 times a second, like the console's
+  // tank engine (56 Hz +/- 5; whole cycles per second, so a one-second recording loops cleanly).
   // Built on any audio context (the recorder uses it to make the TV's engine loop).
   function engineGraph(c, out, wave) {
     var o = c.createOscillator();
     o.setPeriodicWave(wave);
-    o.frequency.value = 68;
+    o.frequency.value = 56;
     var lfo = c.createOscillator();
     lfo.type = 'square';
-    lfo.frequency.value = 15;
+    lfo.frequency.value = 8;
     var depth = c.createGain();
-    depth.gain.value = 6;
+    depth.gain.value = 5;
     lfo.connect(depth);
     depth.connect(o.frequency);
     var g = c.createGain();
@@ -263,11 +264,11 @@ BC.audio = (function () {
       try {
         if (!engine) { if (!level) return; engine = engineGraph(ac, master, waves.p50); }
         var t = ac.currentTime;
-        var k = level === 2 ? 1.45 : 1;
-        engine.g.gain.setValueAtTime(level ? (level === 2 ? 0.07 : 0.03) : 0, t);
-        engine.o.frequency.setValueAtTime(68 * k, t);
-        engine.lfo.frequency.setValueAtTime(15 * k, t);
-        engine.depth.gain.setValueAtTime(6 * k, t);
+        var k = level === 2 ? 1.2 : 1;
+        engine.g.gain.setValueAtTime(level ? (level === 2 ? 0.06 : 0.03) : 0, t);
+        engine.o.frequency.setValueAtTime(56 * k, t);
+        engine.lfo.frequency.setValueAtTime(8 * k, t);
+        engine.depth.gain.setValueAtTime(5 * k, t);
       } catch (e) { /* ignore */ }
     },
     // For tools/render-sounds.mjs: records the engine loop on a given (offline) context.

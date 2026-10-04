@@ -86,7 +86,7 @@ for (const name of Object.keys(LENGTH)) {
   report.push(name + ' ' + (s.length / RATE).toFixed(2) + 's peak ' + PEAK[name]);
 }
 
-// Engine: exactly one second of the engine buzz. Its pitch flips 15 times a second and the
+// Engine: exactly one second of the engine buzz. Its pitch rocks 8 times a second and the
 // tone completes a whole number of cycles, so the second loops seamlessly. The app speeds it
 // up (higher pitch) while the tank drives.
 {

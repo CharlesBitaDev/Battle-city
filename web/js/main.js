@@ -51,7 +51,7 @@ var BC = window.BC || (window.BC = {});
       releaseTimers[btn] = setTimeout(function () {
         releaseTimers[btn] = 0;
         BC.input.press('rc', 0, btn, false);
-      }, 70);
+      }, 40);
     }
   };
   BC.phoneState = function (slot, bits) {

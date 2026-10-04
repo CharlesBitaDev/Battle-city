@@ -209,8 +209,8 @@ public class MainActivity extends Activity implements ControllerServer.Listener 
             engineStream = 0;
             return;
         }
-        float vol = engineLevel == 2 ? 0.55f : 0.22f;
-        float rate = engineLevel == 2 ? 1.45f : 1.0f;
+        float vol = engineLevel == 2 ? 0.45f : 0.22f;
+        float rate = engineLevel == 2 ? 1.2f : 1.0f;
         if (engineStream == 0) {
             engineStream = pool.play(id, vol, vol, 0, -1, rate);
         } else {

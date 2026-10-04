@@ -18,7 +18,7 @@ var BC = window.BC || (window.BC = {});
     { speed: 0.6, bspeed: 2.8, hp: 4, pts: 400 }    // armour (4 hits)
   ];
   var PLAYER_SPEED = 0.9;
-  var TURN_HOLD = 14;   // frames a new direction must be held (from standing) before the tank drives
+  var TURN_HOLD = 10;   // frames a new direction must be held (from standing) before the tank drives
   var RING = [[11, 23], [12, 23], [13, 23], [14, 23], [11, 24], [11, 25], [14, 24], [14, 25]];
   var ENEMY_SPAWN_X = [96, 192, 0];
   var PLAYER_SPAWN = [[64, 192], [128, 192]];
