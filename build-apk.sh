@@ -34,4 +34,5 @@ cp "$OUT/base.apk" "$OUT/unsigned.apk"
 "$BT/apksigner" sign --ks android/battle-city.keystore --ks-pass pass:battlecity \
   --ks-key-alias battlecity --key-pass pass:battlecity --out "$OUT/battle-city.apk" "$OUT/aligned.apk"
 "$BT/apksigner" verify "$OUT/battle-city.apk"
+if command -v node >/dev/null; then node tools/set-catalog.mjs battle-city "$VERSION_CODE" "$VERSION_NAME"; fi
 echo "Built $OUT/battle-city.apk (version $VERSION_NAME, code $VERSION_CODE)"

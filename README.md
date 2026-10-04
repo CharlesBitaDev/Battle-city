@@ -14,6 +14,10 @@ A tank game for Android TV in the style of the classic arcade tank games. Defend
 - **Player 2** uses a phone, because the TV can't tell two remotes apart.
 - **To connect a phone:** connect it to the same Wi-Fi as the TV. Open **Phone controller** on the title screen, then scan the code with the phone's camera (or type the address shown into the phone's browser). Tap **Player 1** or **Player 2**. Nothing needs to be installed on the phone.
 
+## Game Store
+
+**Game Store** is a second TV app that lists the games and installs or updates them with one press of OK, so you don't need to type links. Install it once by typing **tinyurl.com/bttstore** in the TV's Downloader app. After that, open Game Store and choose a game: it shows **Install**, **Update** or **Play**. The list of games is `store/catalog.json`.
+
 ## Install on the TV
 
 The newest build is always here. On the TV, type this short link in the Downloader app: **tinyurl.com/btt000**

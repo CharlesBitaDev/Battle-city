@@ -13,7 +13,7 @@ function parse(name, code) {
   catch (e) { console.error(name + ': ' + e.message); bad++; }
 }
 for (const f of readdirSync(root + 'js')) parse('js/' + f, readFileSync(root + 'js/' + f, 'utf8'));
-for (const f of ['index.html', 'controller.html']) {
+for (const f of ['index.html', 'controller.html', '../store/web/index.html']) {
   const html = readFileSync(root + f, 'utf8');
   const re = /<script>([\s\S]*?)<\/script>/g;
   let m;
@@ -28,5 +28,12 @@ L.forEach((l, i) => {
   if (l.m.length !== 676 || /[^.#@~%-]/.test(l.m)) { console.error('stage ' + (i + 1) + ': bad map'); bad++; }
   if (l.o.length !== 20 || /[^bfpa]/.test(l.o)) { console.error('stage ' + (i + 1) + ': bad enemy list'); bad++; }
 });
+try {
+  const cat = JSON.parse(readFileSync(new URL('../store/catalog.json', import.meta.url), 'utf8'));
+  for (const g of cat.games) {
+    for (const k of ['id', 'name', 'package', 'version', 'apk']) if (!g[k]) { console.error('catalog: ' + (g.id || '?') + ' has no ' + k); bad++; }
+  }
+  if (!cat.store || !cat.store.apk) { console.error('catalog: no store entry'); bad++; }
+} catch (e) { console.error('store/catalog.json: ' + e.message); bad++; }
 if (bad) process.exit(1);
 console.log('OK: code parses as ES2017, ' + L.length + ' stages valid');

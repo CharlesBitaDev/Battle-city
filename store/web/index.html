@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Store</title>
+<style>
+  :root {
+    --bg: #10131c; --panel: #1a1f2d; --panel2: #232a3c; --text: #f2f4f8; --muted: #9aa3b5;
+    --accent: #f2a03d; --play: #4cc38a; --update: #5aa8f2; --err: #f07a6a;
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+               font-family: Roboto, "Noto Sans", Arial, sans-serif; }
+  body { font-size: 1.6vw; }
+  #app { position: absolute; top: 4vh; left: 4vw; right: 4vw; bottom: 4vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2.4vh; }
+  h1 { margin: 0; font-size: 2.8vw; letter-spacing: 0.15vw; font-weight: 800; }
+  h1 span { color: var(--accent); }
+  #status { color: var(--muted); font-size: 1.3vw; }
+  #storeUpdate { display: none; margin-bottom: 2vh; padding: 1.4vh 1.6vw; border-radius: 0.8vw;
+                 background: var(--panel2); border: 0.25vw solid transparent; font-size: 1.5vw; }
+  #storeUpdate.show { display: block; }
+  #storeUpdate b { color: var(--update); }
+  #grid { display: flex; flex-wrap: wrap; align-content: flex-start; margin-right: -2vw; }
+  .card { width: 28vw; margin: 0 2vw 2vw 0; background: var(--panel); border-radius: 1vw; overflow: hidden;
+          border: 0.3vw solid transparent; transition: transform 0.12s, border-color 0.12s; }
+  .focus { border-color: var(--accent) !important; transform: scale(1.04); }
+  .art { width: 100%; height: 15.75vw; background: #000; display: flex; align-items: center; justify-content: center; }
+  .art img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+  .art .letter { font-size: 6vw; font-weight: 800; color: var(--accent); }
+  .info { padding: 1.4vh 1.2vw 1.8vh; }
+  .name { font-size: 1.9vw; font-weight: 700; }
+  .meta { color: var(--muted); font-size: 1.2vw; margin-top: 0.3vh; }
+  .action { margin-top: 1.2vh; display: inline-block; padding: 0.7vh 1.2vw; border-radius: 0.6vw;
+            font-weight: 800; font-size: 1.3vw; letter-spacing: 0.1vw; background: var(--accent); color: #1b1203; }
+  .action.play { background: var(--play); color: #06210f; }
+  .action.update { background: var(--update); color: #071a2d; }
+  .action.busy { background: var(--panel2); color: var(--text); }
+  .bar { height: 0.6vh; background: var(--panel2); border-radius: 0.3vh; margin-top: 1vh; overflow: hidden; display: none; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .busy + .bar { display: block; }
+  #detail { margin-top: auto; padding-top: 2vh; border-top: 0.15vw solid var(--panel2); min-height: 10vh; }
+  #detail .t { font-size: 1.7vw; font-weight: 700; }
+  #detail .d { color: var(--muted); margin-top: 0.6vh; line-height: 1.45; max-width: 70vw; }
+  footer { color: var(--muted); font-size: 1.2vw; margin-top: 1.6vh; }
+  #empty { color: var(--muted); font-size: 1.6vw; padding: 4vh 0; }
+  #toast { position: absolute; left: 50%; bottom: 8vh; transform: translateX(-50%); background: var(--panel2);
+           border-left: 0.4vw solid var(--err); padding: 1.4vh 1.6vw; border-radius: 0.6vw; font-size: 1.4vw;
+           max-width: 70vw; display: none; }
+  #toast.ok { border-left-color: var(--play); }
+  #modal { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(5, 7, 12, 0.85); display: none; align-items: center; justify-content: center; }
+  #modal.show { display: flex; }
+  #modal .box { background: var(--panel); border-radius: 1vw; padding: 3vh 3vw; max-width: 56vw; }
+  #modal h2 { margin: 0 0 1.4vh; font-size: 2vw; }
+  #modal p { color: var(--muted); line-height: 1.5; margin: 0 0 2vh; }
+  #modal .action { border: 0.3vw solid var(--accent); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>GAME <span>STORE</span></h1>
+    <div id="status">Loading games…</div>
+  </header>
+  <div id="storeUpdate">A new version of Game Store is ready. <b>Press OK to update.</b></div>
+  <div id="grid"></div>
+  <div id="empty" hidden>No games yet.</div>
+  <div id="detail"><div class="t"></div><div class="d"></div></div>
+  <footer>Arrows: choose &nbsp;·&nbsp; OK: install or play &nbsp;·&nbsp; Back: exit</footer>
+</div>
+<div id="toast"></div>
+<div id="modal"><div class="box">
+  <h2>Allow Game Store to install games</h2>
+  <p>The TV will open a setting. Turn on <b>Allow from this source</b> (or <b>Unknown sources</b>) for Game Store, then press Back to come here and choose the game again.</p>
+  <span class="action">OPEN SETTING</span>
+</div></div>
+<script>
+(function () {
+  'use strict';
+  var A = window.Android;
+  var $ = function (id) { return document.getElementById(id); };
+  var catalog = null;
+  var items = [];          // focusable things: {type:'store'} or {type:'game', g}
+  var sel = 0;
+  var busy = {};           // id -> percent | 'installing'
+  var modal = false;
+  var COLS = 3;
+  var toastTimer = 0;
+
+  function toast(msg, ok) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = ok ? 'ok' : '';
+    t.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.style.display = 'none'; }, 5000);
+  }
+
+  function installed(pkg) {
+    try { return A ? A.installedVersion(pkg) : -1; } catch (e) { return -1; }
+  }
+
+  function state(g) {
+    if (busy[g.id] !== undefined) return 'busy';
+    var v = installed(g.package);
+    if (v < 0) return 'install';
+    if (v < g.version) return 'update';
+    return 'play';
+  }
+
+  function storeNeedsUpdate() {
+    if (!catalog || !catalog.store || !A) return false;
+    return installed(catalog.store.package) < catalog.store.version;
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  function render() {
+    var grid = $('grid');
+    grid.innerHTML = '';
+    items = [];
+    var su = storeNeedsUpdate();
+    $('storeUpdate').className = su ? 'show' : '';
+    if (su) items.push({ type: 'store', node: $('storeUpdate') });
+    var games = (catalog && catalog.games) || [];
+    $('empty').hidden = games.length > 0;
+    games.forEach(function (g) {
+      var card = el('div', 'card');
+      var art = el('div', 'art');
+      if (g.banner) {
+        var img = new Image();
+        img.alt = g.name;
+        img.onerror = function () { art.innerHTML = ''; art.appendChild(el('div', 'letter', g.name.charAt(0))); };
+        img.src = g.banner;
+        art.appendChild(img);
+      } else art.appendChild(el('div', 'letter', g.name.charAt(0)));
+      card.appendChild(art);
+      var info = el('div', 'info');
+      info.appendChild(el('div', 'name', g.name));
+      info.appendChild(el('div', 'meta', (g.players || '') + (g.versionName ? '  ·  version ' + g.versionName : '')));
+      var act = el('span', 'action');
+      info.appendChild(act);
+      var bar = el('div', 'bar');
+      var fill = el('i');
+      bar.appendChild(fill);
+      info.appendChild(bar);
+      card.appendChild(info);
+      card.addEventListener('click', function () { sel = items.indexOf(item); choose(); });
+      grid.appendChild(card);
+      var item = { type: 'game', g: g, node: card, act: act, fill: fill };
+      items.push(item);
+      paint(item);
+    });
+    if (sel >= items.length) sel = Math.max(0, items.length - 1);
+    focus();
+  }
+
+  // Updates a card's button and progress bar.
+  function paint(it) {
+    var g = it.g, st = state(g), b = busy[g.id];
+    it.act.className = 'action ' + st;
+    it.act.textContent = st === 'busy' ? (b === 'installing' ? 'INSTALLING…' : 'DOWNLOADING ' + Math.max(0, b) + '%')
+      : st === 'play' ? 'PLAY' : st === 'update' ? 'UPDATE' : 'INSTALL';
+    it.fill.style.width = (b === 'installing' ? 100 : Math.max(0, b || 0)) + '%';
+  }
+
+  function focus() {
+    items.forEach(function (it, i) { it.node.classList.toggle('focus', i === sel); });
+    var it = items[sel];
+    var t = $('detail').querySelector('.t'), d = $('detail').querySelector('.d');
+    if (!it) { t.textContent = ''; d.textContent = ''; return; }
+    if (it.type === 'store') {
+      t.textContent = 'Game Store update';
+      d.textContent = 'Version ' + catalog.store.versionName + ' is ready. Your games stay installed.';
+      return;
+    }
+    var g = it.g, v = installed(g.package);
+    t.textContent = g.name;
+    var extra = v < 0 ? 'Not installed yet.' : v < g.version ? 'An update is ready.' : 'Installed and up to date.';
+    d.textContent = (g.description || '') + '  ' + extra;
+  }
+
+  function choose() {
+    var it = items[sel];
+    if (!it || !A) return;
+    if (it.type === 'store') { start('store', catalog.store.apk); return; }
+    var g = it.g, st = state(g);
+    if (st === 'busy') return;
+    if (st === 'play') {
+      if (!A.open(g.package)) toast('Could not open ' + g.name + '.');
+      return;
+    }
+    start(g.id, g.apk);
+  }
+
+  function start(id, url) {
+    for (var k in busy) { toast('Please wait for the current download to finish.'); return; }
+    if (!A.mayInstall()) { modal = true; $('modal').className = 'show'; return; }
+    busy[id] = 0;
+    render();
+    A.install(id, url);
+  }
+
+  function move(dx, dy) {
+    if (!items.length) return;
+    var hasStore = items[0].type === 'store';
+    var first = hasStore ? 1 : 0;
+    if (items[sel].type === 'store') {
+      if (dy > 0 && items.length > 1) sel = 1;
+    } else {
+      var i = sel - first;
+      var games = items.length - first;
+      if (dx) i = Math.max(0, Math.min(games - 1, i + dx));
+      if (dy > 0 && i + COLS < games) i += COLS;
+      if (dy < 0) {
+        if (i - COLS >= 0) i -= COLS;
+        else if (hasStore) { sel = 0; focus(); return; }
+      }
+      sel = i + first;
+    }
+    focus();
+  }
+
+  window.Store = {
+    key: function (k) {
+      if (modal) {
+        if (k === 'ok') { A.allowInstalls(); }
+        if (k === 'ok' || k === 'back') { modal = false; $('modal').className = ''; }
+        return;
+      }
+      if (k === 'left') move(-1, 0);
+      else if (k === 'right') move(1, 0);
+      else if (k === 'up') move(0, -1);
+      else if (k === 'down') move(0, 1);
+      else if (k === 'ok') choose();
+      else if (k === 'back') { if (A) A.exit(); }
+    },
+    onCatalog: function (json, err) {
+      try { catalog = json ? JSON.parse(json) : null; } catch (e) { catalog = null; }
+      var n = catalog && catalog.games ? catalog.games.length : 0;
+      $('status').textContent = err ? (catalog ? 'Offline: showing the saved list' : 'Offline: connect the TV to the internet')
+        : n + (n === 1 ? ' game' : ' games');
+      render();
+    },
+    onProgress: function (id, pct) {
+      busy[id] = pct === 'installing' ? 'installing' : parseInt(pct, 10);
+      var found = false;
+      items.forEach(function (it) { if (it.g && it.g.id === id) { paint(it); found = true; } });
+      if (!found && id === 'store') $('storeUpdate').innerHTML = busy[id] === 'installing' ? 'Installing the update…' : 'Downloading the update… ' + Math.max(0, busy[id]) + '%';
+    },
+    onInstalled: function (id) {
+      delete busy[id];
+      render();
+      toast('Installed! Press OK to play.', true);
+    },
+    onInstallError: function (id, msg) {
+      delete busy[id];
+      render();
+      toast(msg);
+    },
+    refresh: function () { if (catalog) render(); }
+  };
+
+  document.addEventListener('keydown', function (e) {
+    var map = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'ok', Escape: 'back' };
+    if (map[e.key]) { e.preventDefault(); Store.key(map[e.key]); }
+  });
+
+  if (A) A.loadCatalog();
+  else $('status').textContent = 'Open this in the Game Store app on the TV.';
+})();
+</script>
+</body>
+</html>

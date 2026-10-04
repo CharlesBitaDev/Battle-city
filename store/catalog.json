@@ -1,0 +1,21 @@
+{
+  "store": {
+    "package": "com.charlesbita.gamestore",
+    "version": 13,
+    "versionName": "1.0.13",
+    "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/game-store.apk"
+  },
+  "games": [
+    {
+      "id": "battle-city",
+      "name": "Battle City",
+      "package": "com.charlesbita.battlecity",
+      "version": 12,
+      "versionName": "1.0.12",
+      "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/battle-city.apk",
+      "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/android/res/drawable-xhdpi/banner.png",
+      "players": "1-2 players",
+      "description": "Classic tank battles. Defend the eagle across 100 stages, last as long as you can in Survival, or take on a friend in Versus. Phones work as controllers."
+    }
+  ]
+}

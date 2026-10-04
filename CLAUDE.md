@@ -33,3 +33,11 @@ A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmwa
 - Open `web/index.html?debug=1` in Chromium (Playwright). `?debug=1` unlocks all stages. Keyboard: arrows + space (P1), WASD + F (P2), Esc = back.
 - `BC.game.debug` has hooks: `startStage(mode, stage)`, `killEnemies()`, `destroyBase()`, `spawnPower(kind)`, `state()`.
 - To mimic the TV, inject a fake `window.Android` with `page.addInitScript` and call `BC.key(...)` / `BC.phoneState(slot, bits)`.
+
+## Game Store app (store/)
+
+- A second TV app, **Game Store** (`com.charlesbita.gamestore`), lists the games in `store/catalog.json` and installs or updates them with Android's `PackageInstaller` (session API, REQUEST_INSTALL_PACKAGES). On first use the TV asks to allow installs from Game Store (`Android.allowInstalls()` opens that setting). The screen is `store/web/index.html` in a WebView. The remote is mapped to `Store.key()`, and Java calls `Store.onCatalog/onProgress/onInstalled/onInstallError/refresh`.
+- The store reads the catalog from `https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/store/catalog.json` (`CATALOG_URL` in `store/android/src/.../MainActivity.java`), caching the last copy for offline use. **Moving the branch breaks installed stores**, so if that ever happens, keep the old file working or ship a store update first.
+- Each game entry has `id, name, package, version (versionCode), versionName, apk (direct https URL), banner (320x180 image URL), players, description`. A game shows UPDATE when the installed versionCode is lower than `version`. Any Android TV APK can be added, including ones from other repos.
+- `build-apk.sh` and `store/build-store.sh` write their version into the catalog (`tools/set-catalog.mjs`). After building, copy `build-store/game-store.apk` to `dist/` and commit it together with the catalog. The store offers itself as an update when `catalog.store.version` is higher.
+- The owner installs the store once from **tinyurl.com/bttstore** (points to `dist/game-store.apk`). Icons: `node tools/make-store-icons.mjs`.
