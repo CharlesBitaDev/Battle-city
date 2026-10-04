@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>Kiko's Quest controller</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #111; color: #eee; overflow: hidden;
+               font-family: system-ui, -apple-system, Roboto, sans-serif; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  button { font: inherit; color: inherit; }
+  .bar { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #000; }
+  .who { font-weight: 800; font-size: 18px; letter-spacing: 1px; }
+  .who.p1 { color: #f8d038; } .who.p2 { color: #58d878; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #c33; flex: none; }
+  .dot.ok { background: #3c3; }
+  .status { flex: 1; font-size: 14px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .small { background: #222; border: 1px solid #444; border-radius: 10px; height: 40px; min-width: 44px; padding: 0 12px; font-size: 15px; }
+  .small:active { background: #444; }
+  main { position: absolute; top: 56px; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-around; padding: 12px; }
+  #pad { position: relative; width: min(78vh, 46vw); height: min(78vh, 46vw); border-radius: 50%;
+         background: #1d1d1d; border: 3px solid #333; touch-action: none; }
+  #pad i { position: absolute; width: 0; height: 0; border-style: solid; border-color: transparent; opacity: 0.45; }
+  #pad .u { left: 50%; top: 8%; transform: translateX(-50%); border-width: 0 10vmin 13vmin; border-bottom-color: #ddd; }
+  #pad .d { left: 50%; bottom: 8%; transform: translateX(-50%); border-width: 13vmin 10vmin 0; border-top-color: #ddd; }
+  #pad .l { top: 50%; left: 8%; transform: translateY(-50%); border-width: 10vmin 13vmin 10vmin 0; border-right-color: #ddd; }
+  #pad .r { top: 50%; right: 8%; transform: translateY(-50%); border-width: 10vmin 0 10vmin 13vmin; border-left-color: #ddd; }
+  #pad[data-d="1"] .u, #pad[data-d="2"] .d, #pad[data-d="4"] .l, #pad[data-d="8"] .r { opacity: 1; }
+  #fire { width: min(56vh, 32vw); height: min(56vh, 32vw); border-radius: 50%; border: 4px solid #8ee8de;
+          background: #1f8a80; font-size: 26px; font-weight: 800; letter-spacing: 2px; touch-action: none; }
+  #fire.on { background: #2ec4b6; transform: scale(0.96); }
+  @media (orientation: portrait) {
+    main { align-items: flex-end; padding-bottom: 14vh; }
+    #pad { width: 52vw; height: 52vw; }
+    #fire { width: 34vw; height: 34vw; margin-bottom: 9vw; font-size: 20px; }
+    .tip { display: block !important; }
+  }
+  .tip { display: none; position: absolute; top: 72px; left: 16px; right: 16px; text-align: center; color: #888; font-size: 15px; }
+  #choose { position: fixed; inset: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; text-align: center; }
+  #choose[hidden] { display: none; }
+  #choose h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: 2px; }
+  #choose p { margin: 0; color: #aaa; font-size: 16px; max-width: 420px; }
+  .pick { width: min(320px, 80vw); height: 64px; border-radius: 14px; border: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+  .pick.p1 { background: #f8d038; color: #222; }
+  .pick.p2 { background: #58d878; color: #122; }
+  .note { color: #f8a050 !important; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="dot" id="dot"></span>
+  <span class="who" id="who">KIKO'S QUEST</span>
+  <span class="status" id="status">Connecting to the TV…</span>
+  <button class="small" id="menu" aria-label="Pause or back">II</button>
+  <button class="small" id="switch">Player</button>
+  <button class="small" id="full" aria-label="Full screen">⛶</button>
+</div>
+<div class="tip" id="tip">Tip: turn your phone sideways for bigger buttons.</div>
+<main>
+  <div id="pad" aria-label="Move"><i class="u"></i><i class="d"></i><i class="l"></i><i class="r"></i></div>
+  <button id="fire">JUMP</button>
+</main>
+<div id="choose">
+  <h1>KIKO'S QUEST</h1>
+  <p id="chooseMsg">Which player are you?</p>
+  <button class="pick p1" data-slot="1">PLAYER 1</button>
+  <button class="pick p2" data-slot="2">PLAYER 2</button>
+  <p>Left and right run. JUMP (or up) jumps; hold it to jump higher. Down throws fire once you have a sun seed. II pauses.</p>
+</div>
+<script>
+(function () {
+  'use strict';
+  var UP = 1, DOWN = 2, LEFT = 4, RIGHT = 8, FIRE = 16;
+  var $ = function (id) { return document.getElementById(id); };
+  var ws = null, connected = false, slot = 0, bits = 0, sentBits = -1;
+  var wanted = 0;
+  try { wanted = +localStorage.getItem('bc-slot') || 0; } catch (e) { /* ignore */ }
+
+  function setStatus(t) { $('status').textContent = t; }
+  function send(m) { if (ws && ws.readyState === 1) ws.send(m); }
+  function sendBits() { if (bits !== sentBits) { sentBits = bits; send('s:' + bits); } }
+  function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* ignore */ } }
+
+  function showChooser(msg) {
+    $('chooseMsg').textContent = msg || 'Which player are you?';
+    $('chooseMsg').className = msg ? 'note' : '';
+    $('choose').hidden = false;
+  }
+  function join(n) {
+    wanted = n;
+    try { localStorage.setItem('bc-slot', String(n)); } catch (e) { /* ignore */ }
+    $('choose').hidden = true;
+    if (connected) send('join:' + n);
+  }
+
+  function connect() {
+    setStatus(connected ? 'Connected' : 'Connecting to the TV…');
+    try { ws = new WebSocket('ws://' + location.host + '/ws'); } catch (e) { setTimeout(connect, 1500); return; }
+    ws.onopen = function () {
+      connected = true;
+      $('dot').className = 'dot ok';
+      setStatus('Connected to the TV');
+      sentBits = -1;
+      if (wanted) send('join:' + wanted);
+      else showChooser();
+    };
+    ws.onmessage = function (e) {
+      var m = String(e.data);
+      if (m.indexOf('slot:') === 0) {
+        slot = +m.slice(5);
+        $('who').textContent = 'PLAYER ' + slot;
+        $('who').className = 'who p' + slot;
+        setStatus('Connected');
+        sentBits = -1;
+        sendBits();
+      } else if (m === 'kicked') {
+        slot = 0;
+        wanted = 0;
+        $('who').textContent = "KIKO'S QUEST";
+        $('who').className = 'who';
+        showChooser('Another phone took your player. Choose again.');
+      } else if (m === 'mode:menu') {
+        $('fire').textContent = 'OK';
+      } else if (m === 'mode:game') {
+        $('fire').textContent = 'JUMP';
+      } else if (m.indexOf('buzz:') === 0) {
+        buzz(+m.slice(5) || 200);
+      }
+    };
+    ws.onclose = function () {
+      connected = false;
+      $('dot').className = 'dot';
+      setStatus('Lost the TV. Reconnecting…');
+      setTimeout(connect, 1500);
+    };
+    ws.onerror = function () { /* onclose follows */ };
+  }
+
+  setInterval(function () { send('p'); }, 2000);
+
+  // ---- D-pad: the direction comes from where the thumb is, so it can slide around.
+  var pad = $('pad'), padId = null;
+  function padDir(e) {
+    var r = pad.getBoundingClientRect();
+    var dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    if (Math.abs(dx) < r.width * 0.08 && Math.abs(dy) < r.height * 0.08) return 0;
+    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? RIGHT : LEFT;
+    return dy > 0 ? DOWN : UP;
+  }
+  function setDir(d) {
+    var old = bits & 15;
+    if (d === old) return;
+    bits = (bits & FIRE) | d;
+    pad.setAttribute('data-d', String(d));
+    if (d) buzz(8);
+    sendBits();
+  }
+  pad.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    padId = e.pointerId;
+    try { pad.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    setDir(padDir(e));
+  });
+  pad.addEventListener('pointermove', function (e) { if (e.pointerId === padId) setDir(padDir(e)); });
+  function padUp(e) { if (e.pointerId === padId) { padId = null; setDir(0); } }
+  pad.addEventListener('pointerup', padUp);
+  pad.addEventListener('pointercancel', padUp);
+
+  // ---- Fire button
+  var fire = $('fire'), fireIds = {};
+  function fireCount() { var n = 0; for (var k in fireIds) n++; return n; }
+  fire.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    fireIds[e.pointerId] = 1;
+    try { fire.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    fire.className = 'on';
+    bits |= FIRE;
+    buzz(12);
+    sendBits();
+  });
+  function fireUp(e) {
+    delete fireIds[e.pointerId];
+    if (fireCount()) return;
+    fire.className = '';
+    bits &= ~FIRE;
+    sendBits();
+  }
+  fire.addEventListener('pointerup', fireUp);
+  fire.addEventListener('pointercancel', fireUp);
+
+  $('menu').addEventListener('click', function () { send('menu'); buzz(15); });
+  $('switch').addEventListener('click', function () { showChooser(); });
+  $('full').addEventListener('click', function () {
+    var d = document.documentElement;
+    var f = d.requestFullscreen || d.webkitRequestFullscreen;
+    if (f) { try { f.call(d); } catch (e) { /* ignore */ } }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.pick'), function (b) {
+    b.addEventListener('click', function () { join(+b.getAttribute('data-slot')); });
+  });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  // Let go of everything if the page is hidden (screen off, switched app).
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { bits = 0; pad.setAttribute('data-d', '0'); fire.className = ''; sendBits(); }
+  });
+
+  if (wanted) $('choose').hidden = true;
+  connect();
+})();
+</script>
+</body>
+</html>
