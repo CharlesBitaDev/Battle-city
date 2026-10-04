@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Builds the TV app (build/battle-city.apk) with the plain Android SDK tools; no Gradle.
 # Needs: JDK 11+, Android SDK with "build-tools;35.0.0" and "platforms;android-34".
-# Usage: VERSION_CODE=5 ./build-apk.sh
+# Usage: ./build-apk.sh   (version code = number of commits + 1, so every build can update the last)
 set -euo pipefail
 cd "$(dirname "$0")"
 
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/android-sdk}}"
 BT="$SDK/build-tools/35.0.0"
 JAR="$SDK/platforms/android-34/android.jar"
-VERSION_CODE="${VERSION_CODE:-1}"
+VERSION_CODE="${VERSION_CODE:-$(( $(git rev-list --count HEAD 2>/dev/null || echo 0) + 1 ))}"
 VERSION_NAME="${VERSION_NAME:-1.0.$VERSION_CODE}"
 OUT=build
 

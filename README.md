@@ -18,7 +18,7 @@ A tank game for Android TV in the style of the classic arcade tank games. Defend
 
 The newest build is always here:
 
-**https://github.com/CharlesBitaDev/Battle-city/releases/download/latest/battle-city.apk**
+**https://github.com/CharlesBitaDev/Battle-city/raw/ccr-b0870caf-5uxupg/dist/battle-city.apk**
 
 1. Download `battle-city.apk` on the TV, either with its browser or a downloader app.
 2. Open the file and choose **Install**. The first time, the TV asks for permission to install apps from this source. Allow it.

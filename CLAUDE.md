@@ -21,8 +21,9 @@ A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmwa
 
 ## Build and release
 
-- CI (`.github/workflows/build.yml`) runs on every push: checks the code, builds the APK (versionCode = 100 + run number) and replaces the `latest` release.
-- Download link: https://github.com/CharlesBitaDev/Battle-city/releases/download/latest/battle-city.apk
+- **The owner installs `dist/battle-city.apk` from the repo.** After every change: run `node tools/check.mjs`, rebuild, copy `build/battle-city.apk` to `dist/`, and commit it with the change. Download link (work happens on branch `ccr-b0870caf-5uxupg`): https://github.com/CharlesBitaDev/Battle-city/raw/ccr-b0870caf-5uxupg/dist/battle-city.apk
+- versionCode = number of commits + 1 (`build-apk.sh`), so each committed build is newer than the last. Never lower it, or the TV refuses the update.
+- CI (`.github/workflows/build.yml`) would build the APK and replace a `latest` release on every push, but as of 2026-10-04 GitHub never assigns its job a runner on this account (it fails in seconds with no steps or logs). It's probably an account or billing restriction, not the code.
 - Local build: `ANDROID_HOME=~/android-sdk ./build-apk.sh` (install the SDK command-line tools, then `sdkmanager "build-tools;35.0.0" "platforms;android-34"`).
 
 ## Testing without a TV

@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -31,7 +33,7 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" "platforms;android-34" > /dev/null
 
       - name: Build the APK
-        run: VERSION_CODE=$((100 + GITHUB_RUN_NUMBER)) ./build-apk.sh
+        run: ./build-apk.sh
 
       - uses: actions/upload-artifact@v4
         with:
@@ -48,4 +50,4 @@ jobs:
           gh release create latest build/battle-city.apk \
             --target "$GITHUB_SHA" \
             --title "Battle City (latest build)" \
-            --notes "Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}, build $((100 + GITHUB_RUN_NUMBER)). Install battle-city.apk on the TV."
+            --notes "Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}. Install battle-city.apk on the TV."
