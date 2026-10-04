@@ -38,7 +38,7 @@ function makeStage(level, attempt) {
   const t = (level - 1) / (COUNT - 1); // 0..1 difficulty
   const g = emptyTiles();
 
-  const steelP = 0.02 + 0.3 * t;
+  const steelP = 0.12 + 0.22 * t;   // share of walls that are steel
   const halfP = 0.25;
   function wallTile() {
     return r() < steelP ? '@' : '#';
@@ -195,6 +195,18 @@ function makeStage(level, attempt) {
     for (let i = 0; i < 6; i++) set(Math.floor(r() * T), 2 + Math.floor(r() * 8), '-');
   }
 
+  // Every stage gets at least a few steel blocks.
+  let steelTiles = 0;
+  const brickTiles = [];
+  for (let y = 0; y < T; y++) for (let x = 0; x < (mirror ? 6 : T); x++) {
+    if (g[y][x].t === '@') steelTiles++;
+    else if (g[y][x].t === '#' && y < 11) brickTiles.push([x, y]);
+  }
+  for (let i = steelTiles; i < 2 && brickTiles.length; i++) {
+    const [x, y] = brickTiles.splice(Math.floor(r() * brickTiles.length), 1)[0];
+    g[y][x] = { t: '@', m: 15 };
+  }
+
   if (mirror) {
     for (let y = 0; y < T; y++) for (let x = 0; x < 6; x++) {
       const s = g[y][x];
@@ -309,11 +321,11 @@ const CUSTOM = {
     '....n...n....',
     '%%....#....%%',
     '%%.##.#.##.%%',
-    '...#.....#...',
+    '...@.....@...',
     '~~...uuu...~~',
     '...#.....#...',
     '.#.#.###.#.#.',
-    '.#.........#.',
+    '.@.........@.',
     '..#.......#..',
     '..#.......#..'
   ]

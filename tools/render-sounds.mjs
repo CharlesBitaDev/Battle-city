@@ -1,5 +1,5 @@
-// Pre-records every sound effect from web/js/audio.js into web/sounds/*.ogg, plus a seamless
-// engine loop. The TV app plays these with Android's SoundPool, which is far lighter than
+// Pre-records every sound effect from web/js/audio.js (8-bit, NES-style) into
+// web/sounds/*.ogg, plus a seamless engine loop. The TV app plays these with Android's SoundPool, which is far lighter than
 // synthesising sounds live in the WebView (the TV's CPU is weak).
 // Needs Playwright (Chromium) and ffmpeg with libvorbis. Run: node tools/render-sounds.mjs
 import { createRequire } from 'node:module';
@@ -86,47 +86,22 @@ for (const name of Object.keys(LENGTH)) {
   report.push(name + ' ' + (s.length / RATE).toFixed(2) + 's peak ' + PEAK[name]);
 }
 
-// Engine: one second of rumble whose tones repeat exactly, cross-faded so it loops cleanly.
-// The app speeds it up (higher pitch) while the tank drives.
+// Engine: exactly one second of the engine buzz. Its pitch flips 15 times a second and the
+// tone completes a whole number of cycles, so the second loops seamlessly. The app speeds it
+// up (higher pitch) while the tank drives.
 {
   const p = await b.newPage();
-  await p.goto('about:blank');
+  await p.goto('file://' + root + 'web/index.html');
   const data = await p.evaluate(async (rate) => {
-    const T = 1.0, X = 0.25;
-    const ctx = new OfflineAudioContext(1, Math.ceil(rate * (T + X)), rate);
-    const n = ctx.sampleRate * 2;
-    const brown = ctx.createBuffer(1, n, ctx.sampleRate);
-    const d = brown.getChannelData(0);
-    let v = 0;
-    for (let i = 0; i < n; i++) { v = (v + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = v * 3.5; }
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 260; lp.Q.value = 3;
-    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 36;
-    const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = 18;
-    const o2g = ctx.createGain(); o2g.gain.value = 0.35;
-    const src = ctx.createBufferSource(); src.buffer = brown; src.loop = true;
-    const ng = ctx.createGain(); ng.gain.value = 0.5;
-    const trem = ctx.createGain(); trem.gain.value = 0.7;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 12;
-    const lfoAmt = ctx.createGain(); lfoAmt.gain.value = 0.3;
-    const out = ctx.createGain(); out.gain.value = 0.9;
-    lfo.connect(lfoAmt); lfoAmt.connect(trem.gain);
-    o.connect(lp); o2.connect(o2g); o2g.connect(lp); src.connect(ng); ng.connect(lp);
-    lp.connect(trem); trem.connect(out); out.connect(ctx.destination);
-    o.start(); o2.start(); src.start(); lfo.start();
+    const ctx = new OfflineAudioContext(1, rate, rate);
+    BC.audio.renderEngine(ctx);
     const buf = await ctx.startRendering();
-    const a = buf.getChannelData(0);
-    const L = Math.round(rate * T), F = Math.round(rate * X);
-    const res = new Array(L);
-    for (let i = 0; i < L; i++) res[i] = a[i];
-    // blend the extra tail into the start so the end flows into the beginning
-    for (let i = 0; i < F; i++) { const k = i / F; res[i] = a[L + i] * (1 - k) + a[i] * k; }
-    return res;
+    return Array.from(buf.getChannelData(0));
   }, RATE);
   await p.close();
   let peak = 0;
   for (const x of data) peak = Math.max(peak, Math.abs(x));
-  const scaled = data.map((x) => x * (0.6 / peak));
-  save('engine', scaled);
+  save('engine', data.map((x) => x * (0.6 / peak)));
   report.push('engine loop 1.00s (normalised to 0.60)');
 }
 
