@@ -1,9 +1,10 @@
 {
   "store": {
     "package": "com.charlesbita.gamestore",
-    "version": 13,
-    "versionName": "1.0.13",
-    "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/game-store.apk"
+    "version": 18,
+    "versionName": "1.0.18",
+    "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/game-store.apk",
+    "link": "tinyurl.com/bttstore"
   },
   "games": [
     {
@@ -15,7 +16,8 @@
       "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/battle-city.apk",
       "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/android/res/drawable-xhdpi/banner.png",
       "players": "1-2 players",
-      "description": "Classic tank battles. Defend the eagle across 100 stages, last as long as you can in Survival, or take on a friend in Versus. Phones work as controllers."
+      "description": "Classic tank battles. Defend the eagle across 100 stages, last as long as you can in Survival, or take on a friend in Versus. Phones work as controllers.",
+      "link": "tinyurl.com/btt000"
     },
     {
       "id": "kiko",
@@ -26,7 +28,8 @@
       "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/kiko.apk",
       "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/kiko/android/res/drawable-xhdpi/banner.png",
       "players": "1-2 players",
-      "description": "Run, jump and stomp through 16 levels across sunny meadows, desert dunes, crystal caves and the starry sky. Berries make Kiko big and sun seeds let Kiko throw fire. A friend can join on a phone."
+      "description": "Run, jump and stomp through 16 levels across sunny meadows, desert dunes, crystal caves and the starry sky. Berries make Kiko big and sun seeds let Kiko throw fire. A friend can join on a phone.",
+      "link": "tinyurl.com/kikoquest"
     },
     {
       "id": "cheese",
@@ -37,7 +40,8 @@
       "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/cheese.apk",
       "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/cheese/android/res/drawable-xhdpi/banner.png",
       "players": "1-2 players",
-      "description": "A maze chase across 30 levels. Steer Pip the mouse to every cheese crumb while four cats hunt him, each in its own way. Grab a big cheese and the cats run scared. A friend can join on a phone."
+      "description": "A maze chase across 30 levels. Steer Pip the mouse to every cheese crumb while four cats hunt him, each in its own way. Grab a big cheese and the cats run scared. A friend can join on a phone.",
+      "link": "tinyurl.com/cheesechasetv"
     }
   ]
 }

@@ -41,6 +41,7 @@ A Battle City-style tank game for an Android 9 TV box (generic "SMART_TV" firmwa
 - Each game entry has `id, name, package, version (versionCode), versionName, apk (direct https URL), banner (320x180 image URL), players, description`. A game shows UPDATE when the installed versionCode is lower than `version`. Any Android TV APK can be added, including ones from other repos.
 - `build-apk.sh` and `store/build-store.sh` write their version into the catalog (`tools/set-catalog.mjs`). After building, copy `build-store/game-store.apk` to `dist/` and commit it together with the catalog. The store offers itself as an update when `catalog.store.version` is higher.
 - The owner installs the store once from **tinyurl.com/bttstore** (points to `dist/game-store.apk`). Icons: `node tools/make-store-icons.mjs`.
+- The owner's TV has no reachable "Install unknown apps" setting for Game Store (2026-10-04), so when `mayInstall()` is false, or an install fails, the store shows "other ways": hand the APK link to Downloader (`com.esaba.downloader`, already allowed to install) or a browser with `Android.openWith(url, pkg)` (ACTION_VIEW; if Downloader won't take a link it is just opened and the page tells them the short link), try installing anyway (the system may prompt), or open the setting. Each catalog entry has a `link` (its tinyurl) shown there.
 
 ## Kiko's Quest (kiko/)
 

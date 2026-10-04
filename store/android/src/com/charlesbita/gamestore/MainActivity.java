@@ -327,6 +327,55 @@ public class MainActivity extends Activity {
             download(id, url);
         }
 
+        /**
+         * Hands a download link to another app that may already be allowed to install apps:
+         * pkg = an app such as Downloader ("" = whatever opens web links, e.g. a browser).
+         * Returns "sent" (the app got the link), "opened" (the app opened, without the link)
+         * or "none" (no such app).
+         */
+        @JavascriptInterface
+        public String openWith(String url, String pkg) {
+            PackageManager pm = getPackageManager();
+            Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (pkg != null && pkg.length() > 0) view.setPackage(pkg);
+            String result = "none";
+            Intent go = null;
+            if (view.resolveActivity(pm) != null) {
+                go = view;
+                result = "sent";
+            } else if (pkg != null && pkg.length() > 0) {
+                go = pm.getLeanbackLaunchIntentForPackage(pkg);
+                if (go == null) go = pm.getLaunchIntentForPackage(pkg);
+                if (go != null) result = "opened";
+            }
+            if (go != null) {
+                final Intent launch = go;
+                ui.post(new Runnable() {
+                    public void run() {
+                        try {
+                            startActivity(launch);
+                        } catch (Exception e) {
+                            call("Store.onInstallError", "", "That app could not be opened.");
+                        }
+                    }
+                });
+            }
+            return result;
+        }
+
+        /** True if some app can open this link (pkg as in openWith). */
+        @JavascriptInterface
+        public boolean canOpen(String url, String pkg) {
+            PackageManager pm = getPackageManager();
+            Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            if (pkg != null && pkg.length() > 0) {
+                if (installedVersion(pkg) < 0) return false;
+                return true;
+            }
+            return view.resolveActivity(pm) != null;
+        }
+
         @JavascriptInterface
         public boolean open(String pkg) {
             PackageManager pm = getPackageManager();

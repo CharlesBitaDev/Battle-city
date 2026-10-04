@@ -53,7 +53,12 @@
   #modal .box { background: var(--panel); border-radius: 1vw; padding: 3vh 3vw; max-width: 56vw; }
   #modal h2 { margin: 0 0 1.4vh; font-size: 2vw; }
   #modal p { color: var(--muted); line-height: 1.5; margin: 0 0 2vh; }
-  #modal .action { border: 0.3vw solid var(--accent); }
+  #modal .box { min-width: 46vw; }
+  #modal .opt { display: block; margin: 0 0 1.2vh; padding: 1.2vh 1.4vw; border-radius: 0.6vw; background: var(--panel2);
+                font-weight: 700; border: 0.3vw solid transparent; }
+  #modal .opt small { display: block; font-weight: 400; color: var(--muted); font-size: 1.15vw; margin-top: 0.3vh; }
+  #modal .opt.on { border-color: var(--accent); }
+  #modal .link { color: var(--accent); font-weight: 800; }
 </style>
 </head>
 <body>
@@ -70,9 +75,9 @@
 </div>
 <div id="toast"></div>
 <div id="modal"><div class="box">
-  <h2>Allow Game Store to install games</h2>
-  <p>The TV will open a setting. Turn on <b>Allow from this source</b> (or <b>Unknown sources</b>) for Game Store, then press Back to come here and choose the game again.</p>
-  <span class="action">OPEN SETTING</span>
+  <h2 id="mTitle">Install</h2>
+  <p id="mText"></p>
+  <div id="mOpts"></div>
 </div></div>
 <script>
 (function () {
@@ -83,7 +88,8 @@
   var items = [];          // focusable things: {type:'store'} or {type:'game', g}
   var sel = 0;
   var busy = {};           // id -> percent | 'installing'
-  var modal = false;
+  var modal = null;        // {g, opts, sel} while the "other ways to install" box is open
+  var DOWNLOADER = 'com.esaba.downloader';
   var COLS = 3;
   var toastTimer = 0;
 
@@ -198,12 +204,70 @@
     start(g.id, g.apk);
   }
 
-  function start(id, url) {
+  function start(id, url, anyway) {
     for (var k in busy) { toast('Please wait for the current download to finish.'); return; }
-    if (!A.mayInstall()) { modal = true; $('modal').className = 'show'; return; }
+    if (!anyway && !A.mayInstall()) { showWays(id); return; }
     busy[id] = 0;
     render();
     A.install(id, url);
+  }
+
+  function entry(id) {
+    if (id === 'store') return { id: 'store', name: 'Game Store', apk: catalog.store.apk, link: catalog.store.link };
+    var gs = (catalog && catalog.games) || [];
+    for (var i = 0; i < gs.length; i++) if (gs[i].id === id) return gs[i];
+    return null;
+  }
+
+  // The TV hasn't let Game Store install apps (some TVs hide that setting), so offer other ways:
+  // hand the download to Downloader or a browser, which may already be allowed to install.
+  function showWays(id, failed) {
+    var g = entry(id);
+    if (!g) return;
+    var opts = [];
+    var hasDl = false, hasBrowser = false;
+    try { hasDl = A.canOpen(g.apk, DOWNLOADER); } catch (e) { /* old store */ }
+    try { hasBrowser = A.canOpen(g.apk, ''); } catch (e) { /* old store */ }
+    if (hasDl) opts.push({ k: 'dl', t: 'Open in Downloader', s: 'Downloader downloads it, then choose Install.' + (g.link ? ' If Downloader opens empty, type ' + g.link + ' there.' : '') });
+    if (hasBrowser) opts.push({ k: 'web', t: 'Open in the web browser', s: 'The browser downloads it; open the file to install.' });
+    opts.push({ k: 'try', t: 'Try installing anyway', s: 'The TV may ask you to allow Game Store itself.' });
+    opts.push({ k: 'set', t: 'Open the install setting', s: 'Turn on "Allow from this source" for Game Store.' });
+    opts.push({ k: 'close', t: 'Close', s: '' });
+    modal = { g: g, opts: opts, sel: 0 };
+    $('mTitle').textContent = 'Install ' + g.name;
+    $('mText').innerHTML = (failed ? 'Game Store could not install it here. ' : 'Your TV hasn\'t allowed Game Store to install apps yet. ') +
+      'Choose another way' + (g.link ? ', or type <span class="link">' + g.link + '</span> in the Downloader app.' : '.');
+    paintWays();
+    $('modal').className = 'show';
+  }
+
+  function paintWays() {
+    var box = $('mOpts');
+    box.innerHTML = '';
+    modal.opts.forEach(function (o, i) {
+      var d = el('div', 'opt' + (i === modal.sel ? ' on' : ''), o.t);
+      if (o.s) d.appendChild(el('small', '', o.s));
+      d.addEventListener('click', function () { modal.sel = i; pickWay(); });
+      box.appendChild(d);
+    });
+  }
+
+  function closeWays() { modal = null; $('modal').className = ''; }
+
+  function pickWay() {
+    var g = modal.g, k = modal.opts[modal.sel].k;
+    closeWays();
+    if (k === 'dl') {
+      var r = A.openWith(g.apk, DOWNLOADER);
+      if (r === 'opened') toast('In Downloader, type ' + (g.link || g.apk) + ' and press Go.', true);
+      else if (r === 'none') toast('Downloader is not installed.');
+    } else if (k === 'web') {
+      if (A.openWith(g.apk, '') === 'none') toast('No web browser found on this TV.');
+    } else if (k === 'try') {
+      start(g.id, g.apk, true);
+    } else if (k === 'set') {
+      A.allowInstalls();
+    }
   }
 
   function move(dx, dy) {
@@ -229,8 +293,11 @@
   window.Store = {
     key: function (k) {
       if (modal) {
-        if (k === 'ok') { A.allowInstalls(); }
-        if (k === 'ok' || k === 'back') { modal = false; $('modal').className = ''; }
+        if (k === 'up' || k === 'down') {
+          modal.sel = (modal.sel + (k === 'up' ? modal.opts.length - 1 : 1)) % modal.opts.length;
+          paintWays();
+        } else if (k === 'ok') pickWay();
+        else if (k === 'back') closeWays();
         return;
       }
       if (k === 'left') move(-1, 0);
@@ -261,7 +328,9 @@
     onInstallError: function (id, msg) {
       delete busy[id];
       render();
-      toast(msg);
+      // a blocked or failed install: offer the other ways (cancelling isn't a failure)
+      if (id && entry(id) && msg.indexOf('cancelled') < 0 && msg.indexOf('Download failed') < 0) showWays(id, true);
+      else toast(msg);
     },
     refresh: function () { if (catalog) render(); }
   };
