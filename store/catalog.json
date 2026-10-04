@@ -27,6 +27,17 @@
       "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/kiko/android/res/drawable-xhdpi/banner.png",
       "players": "1-2 players",
       "description": "Run, jump and stomp through 16 levels across sunny meadows, desert dunes, crystal caves and the starry sky. Berries make Kiko big and sun seeds let Kiko throw fire. A friend can join on a phone."
+    },
+    {
+      "id": "cheese",
+      "name": "Cheese Chase",
+      "package": "com.charlesbita.cheese",
+      "version": 16,
+      "versionName": "1.0.16",
+      "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/cheese.apk",
+      "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/cheese/android/res/drawable-xhdpi/banner.png",
+      "players": "1-2 players",
+      "description": "A maze chase across 30 levels. Steer Pip the mouse to every cheese crumb while four cats hunt him, each in its own way. Grab a big cheese and the cats run scared. A friend can join on a phone."
     }
   ]
 }
