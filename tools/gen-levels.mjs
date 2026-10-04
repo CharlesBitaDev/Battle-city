@@ -296,11 +296,58 @@ function roster(level) {
   return keyed.map((o) => o.c).join('');
 }
 
+// Hand-made stages, drawn in 13x13 tiles (each tile = 2x2 cells).
+// . empty  # brick  @ steel  ~ water  % trees  - ice
+// u / n / [ / ] = top / bottom / left / right half of a brick tile
+// Keep clear: enemy spawns (row 0, columns 0, 6, 12), player spawns (row 12, columns 4 and 8)
+// and the base area (columns 5-7, rows 11-12).
+const CUSTOM = {
+  1: [
+    '.............',
+    '.##.#...#.##.',
+    '.##.#.@.#.##.',
+    '....n...n....',
+    '%%....#....%%',
+    '%%.##.#.##.%%',
+    '...#.....#...',
+    '~~...uuu...~~',
+    '...#.....#...',
+    '.#.#.###.#.#.',
+    '.#.........#.',
+    '..#.......#..',
+    '..#.......#..'
+  ]
+};
+
+function customStage(rows) {
+  const HALF = { u: 3, n: 12, '[': 5, ']': 10 };
+  const cells = [];
+  for (let y = 0; y < N; y++) cells.push(new Array(N).fill('.'));
+  rows.forEach((row, ty) => {
+    for (let tx = 0; tx < T; tx++) {
+      const ch = row.charAt(tx) || '.';
+      if (ch === '.') continue;
+      const mask = HALF[ch] || 15;
+      const t = HALF[ch] ? '#' : ch;
+      if (mask & 1) cells[ty * 2][tx * 2] = t;
+      if (mask & 2) cells[ty * 2][tx * 2 + 1] = t;
+      if (mask & 4) cells[ty * 2 + 1][tx * 2] = t;
+      if (mask & 8) cells[ty * 2 + 1][tx * 2 + 1] = t;
+    }
+  });
+  for (const [x, y] of [[11, 23], [12, 23], [13, 23], [14, 23], [11, 24], [11, 25], [14, 24], [14, 25]]) cells[y][x] = '#';
+  return { cells, style: 'hand-made' };
+}
+
 const out = [];
 const styles = {};
 for (let level = 1; level <= COUNT; level++) {
   let stage = null;
-  for (let attempt = 0; attempt < 200; attempt++) {
+  if (CUSTOM[level]) {
+    stage = customStage(CUSTOM[level]);
+    if (!valid(stage.cells)) throw new Error('Hand-made stage ' + level + ' blocks a spawn or the base, or is too full or empty');
+  }
+  for (let attempt = 0; attempt < 200 && !stage; attempt++) {
     const s = makeStage(level, attempt);
     if (valid(s.cells)) { stage = s; break; }
   }
