@@ -18,6 +18,7 @@ var BC = window.BC || (window.BC = {});
     { speed: 0.6, bspeed: 2.8, hp: 4, pts: 400 }    // armour (4 hits)
   ];
   var PLAYER_SPEED = 0.9;
+  var TURN_HOLD = 14;   // frames a new direction must be held (from standing) before the tank drives
   var RING = [[11, 23], [12, 23], [13, 23], [14, 23], [11, 24], [11, 25], [14, 24], [14, 25]];
   var ENEMY_SPAWN_X = [96, 192, 0];
   var PLAYER_SPAWN = [[64, 192], [128, 192]];
@@ -188,7 +189,7 @@ var BC = window.BC || (window.BC = {});
       isPlayer: isPlayer, pi: 0, etype: 0, x: 0, y: 0, dir: 0, speed: PLAYER_SPEED,
       bspeed: 2.6, maxBullets: 1, steel: false, bulletsOut: 0, hp: 1, bonus: false,
       spawn: 50, shield: 0, frozen: 0, slide: 0, anim: 0, moving: false, dead: false,
-      ai: 0, blocked: 0, fireCd: 0, autoCd: 0
+      ai: 0, blocked: 0, fireCd: 0, autoCd: 0, turnWait: 0
     };
   }
 
@@ -358,17 +359,27 @@ var BC = window.BC || (window.BC = {});
     if (G.lost) return;
     if (t.frozen > 0) { t.frozen--; t.moving = false; return; }
     if (inp.d >= 0) {
-      turn(t, inp.d);
-      moveTank(t, PLAYER_SPEED);
-      t.moving = true;
-      t.slide = 22;
+      if (inp.d !== t.dir && !t.moving) {
+        // Standing still: a tap only turns on the spot; keep holding to drive off.
+        turn(t, inp.d);
+        t.turnWait = TURN_HOLD;
+      } else if (t.turnWait > 0) {
+        t.turnWait--;
+      } else {
+        turn(t, inp.d);
+        moveTank(t, PLAYER_SPEED);
+        t.moving = true;
+        t.slide = 22;
+      }
     } else if (t.slide > 0 && onIce(t)) {
       t.slide--;
       moveTank(t, PLAYER_SPEED);
     } else {
       t.slide = 0;
       t.moving = false;
+      t.turnWait = 0;
     }
+    if (inp.d < 0) t.turnWait = 0;
     if (t.autoCd > 0) t.autoCd--;
     if (inp.edge || (inp.fire && t.autoCd <= 0)) {
       if (fire(t)) t.autoCd = 16;
