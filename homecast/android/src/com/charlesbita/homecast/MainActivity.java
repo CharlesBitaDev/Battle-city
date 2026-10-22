@@ -38,6 +38,8 @@ import android.widget.FrameLayout;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.List;
 
 /**
@@ -241,8 +243,48 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
         }
     }
 
-    private void play(String url, final int startMs) {
+    /** Bumped by every play and stop, so a late check or time limit can't act on another video. */
+    private int playSeq;
+    private static final int OPEN_LIMIT_MS = 30000;
+
+    /** Checks that the phone answers before opening the player: MediaPlayer can wait for minutes
+     *  on an address it can't reach without reporting anything. */
+    private void play(final String url, final int startMs) {
         release();
+        final int seq = ++playSeq;
+        new Thread(new Runnable() {
+            public void run() {
+                final String problem = probe(url);
+                ui.post(new Runnable() {
+                    public void run() {
+                        if (seq != playSeq) return;
+                        if (problem != null) js("HC.onPlayer('error'," + JSONObject.quote(problem) + ")");
+                        else openPlayer(url, startMs, seq);
+                    }
+                });
+            }
+        }, "probe").start();
+    }
+
+    /** null when the phone sends the video, else "unreachable", "refused", "missing" or "http N". */
+    private static String probe(String url) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(url).openConnection();
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(8000);
+            c.setRequestProperty("Range", "bytes=0-1");
+            int code = c.getResponseCode();
+            if (code == 200 || code == 206) return null;
+            return code == 403 ? "refused" : code == 404 ? "missing" : "http " + code;
+        } catch (Exception e) {
+            return "unreachable";
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    private void openPlayer(String url, final int startMs, final int seq) {
         final MediaPlayer m = new MediaPlayer();
         mp = m;
         prepared = false;
@@ -318,6 +360,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
             });
             buffering = true;
             m.prepareAsync();
+            // some TV decoders never answer for a video they can't handle (e.g. taller than 1080)
+            ui.postDelayed(new Runnable() {
+                public void run() {
+                    if (seq != playSeq || mp != m || prepared) return;
+                    release();
+                    js("HC.onPlayer('error','stuck')");
+                }
+            }, OPEN_LIMIT_MS);
         } catch (Exception e) {
             js("HC.onPlayer('error'," + JSONObject.quote("cannot open: " + e.getMessage()) + ")");
         }
@@ -552,7 +602,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
         @JavascriptInterface
         public void play(final String url, final int startMs) {
             ui.post(new Runnable() {
-                public void run() { play(url, startMs); }
+                public void run() { MainActivity.this.play(url, startMs); }
             });
         }
 
@@ -591,6 +641,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
         public void stop() {
             ui.post(new Runnable() {
                 public void run() {
+                    playSeq++;
                     release();
                     restoreDisplayMode();
                     if (surface != null) surface.setLayoutParams(new FrameLayout.LayoutParams(

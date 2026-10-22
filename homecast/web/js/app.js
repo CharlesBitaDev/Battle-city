@@ -999,6 +999,7 @@
       return;
     }
     if (m.t === 'state') applyState(m);
+    if (m.t === 'msg') toast(m.text, 9000);
   }
 
   var lastLib = '';
@@ -1183,8 +1184,16 @@
       else if (e === 'buffering') $('pSpin').style.display = 'block';
       else if (e === 'ended') { stopPlayer(true); }
       else if (e === 'error') {
-        toast(info === 'unsupported' ? 'This TV can\'t play this video\'s format.' : info === 'network' || info === 'timeout'
-          ? 'Lost the connection to the phone. Keep HomeCast open on the phone and on the same Wi-Fi.' : 'Couldn\'t play this video (' + info + ').', 7000);
+        var lost = 'Lost the connection to the phone. Keep HomeCast open on the phone and on the same Wi-Fi.';
+        var why = {
+          unsupported: 'This TV can\'t play this video\'s format.', network: lost, timeout: lost,
+          unreachable: 'The TV can\'t reach the phone. Keep HomeCast open on the phone, and check the phone and TV are on the same Wi-Fi (not a guest network).',
+          refused: 'The phone refused this video. Close and reopen HomeCast on the phone.',
+          missing: 'That video is no longer on the phone.',
+          stuck: 'The TV couldn\'t open this video. It may be too big for this TV to decode (tall phone screen recordings often are). Try another video.'
+        }[info] || 'Couldn\'t play this video (' + info + ').';
+        toast(why, 9000);
+        broadcast({ t: 'msg', text: why });
         stopPlayer(false);
       }
       dirty();
