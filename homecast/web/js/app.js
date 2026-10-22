@@ -21,6 +21,8 @@
     phone: 'M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z',
     settings: 'M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z',
     play: 'M8 5v14l11-7z',
+    search: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+    clear: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
     pause: 'M6 19h4V5H6v14zm8-14v14h4V5h-4z',
     rew: 'M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z',
     ff: 'M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z',
@@ -858,6 +860,11 @@
     $('nowFwd').addEventListener('click', function () { phoneSend({ t: 'cmd', a: 'skip', ms: 10000 }); });
     $('nowStop').addEventListener('click', function () { phoneSend({ t: 'cmd', a: 'stop' }); });
     $('nowPadBtn').addEventListener('click', function () { openSheet('pad'); });
+    $('qIcon').innerHTML = icon('search');
+    $('qClear').innerHTML = icon('clear');
+    $('q').addEventListener('input', renderSearch);
+    $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('q').blur(); });
+    $('qClear').addEventListener('click', function () { $('q').value = ''; renderSearch(); $('app').scrollTop = 0; });
     $('nowAudio').innerHTML = icon('audio');
     $('nowSubs').innerHTML = icon('subs');
     $('nowAudio').addEventListener('click', function () { openSheet('tracks', 'audio'); });
@@ -941,12 +948,38 @@
     var has = D.rows.length > 0;
     $('main').className = has ? '' : 'hide';
     $('empty').className = has ? 'hide' : '';
+    $('search').className = has ? '' : 'hide';
     if (!has) {
       if (A && !A.hasMediaPermission()) showPermission();
       else $('empty').innerHTML = '<h1>No videos found</h1><p>Videos you record or download on this phone appear here. Videos in WhatsApp, Facebook, Instagram and TikTok folders are not shown.</p>';
     }
     renderRows();
     updateFocusView();
+    if (has) renderSearch();
+  }
+
+  // ---- search (phone): every word must appear in the title, folder or file name
+  function searching() { return !TV && !!$('q').value.trim(); }
+  function renderSearch() {
+    var q = $('q').value.trim().toLowerCase(), box = $('results');
+    $('qClear').className = q ? '' : 'hide';
+    if (!q) { box.className = 'hide'; $('main').className = D.rows.length ? '' : 'hide'; return; }
+    var words = q.split(/\s+/);
+    var found = Object.keys(D.items).map(function (id) { return D.items[id]; }).filter(function (it) {
+      var hay = ((it.title || '') + ' ' + (it.folder || '') + ' ' + (it.name || '')).toLowerCase();
+      return words.every(function (w) { return hay.indexOf(w) >= 0; });
+    }).sort(function (a, b) { return b.date - a.date; });
+    $('main').className = 'hide';
+    box.className = '';
+    box.innerHTML = '<div class="count">' + (found.length ? found.length + (found.length === 1 ? ' video' : ' videos') + ' · tap one to play it on the TV'
+      : 'No videos match \u201c' + esc($('q').value.trim()) + '\u201d') + '</div>' +
+      found.slice(0, 100).map(function (it) {
+        return '<div class="res" data-id="' + esc(it.id) + '"><img loading="lazy" alt="" onerror="this.removeAttribute(\'src\')" src="' + esc(it.th || '') + '"><div><b>' + esc(it.title) + '</b><small>' +
+          esc([it.folder, it.dur ? fmtTime(it.dur) : '', quality(it.w, it.h)].filter(Boolean).join('  ·  ')) + '</small></div></div>';
+      }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.res'), function (el) {
+      el.addEventListener('click', function () { $('q').blur(); phonePlay(el.getAttribute('data-id'), 'resume'); });
+    });
   }
 
   function discover() {
@@ -1072,7 +1105,7 @@
     updateFocusView();
     // follow the TV's selection: the row into view, each row to the TV's position
     var re = rowEls[D.focus.r];
-    if (re && D.focus.r !== prevR) {
+    if (re && D.focus.r !== prevR && !searching()) {
       var top = re.el.getBoundingClientRect().top, h = window.innerHeight;
       if (top < 60 || top > h - 260) $('app').scrollTop += top - 70;
     }
@@ -1110,7 +1143,7 @@
   function phoneScrolled() {
     clearTimeout(vTimer);
     vTimer = setTimeout(function () {
-      if (!P.ok) return;
+      if (!P.ok || searching()) return;
       if (Date.now() < suppressUntil) { phoneScrolled(); return; }
       var best = -1;
       for (var r = 0; r < rowEls.length; r++) {
