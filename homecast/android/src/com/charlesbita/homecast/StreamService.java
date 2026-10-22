@@ -93,8 +93,8 @@ public class StreamService extends Service {
     private final Runnable idleCheck = new Runnable() {
         public void run() {
             MediaServer s = server;
-            boolean busy = appVisible || (s != null && s.activeStreams() > 0);
             long now = System.currentTimeMillis();
+            boolean busy = appVisible || (s != null && (s.activeStreams() > 0 || now - s.lastRequestAt() < 3 * 60000));
             if (busy) idleSince = now;
             if (now - idleSince > IDLE_MS) {
                 stopSelf();

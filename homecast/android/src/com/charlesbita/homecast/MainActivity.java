@@ -76,8 +76,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
         prefs = getSharedPreferences("homecast", MODE_PRIVATE);
         String forced = prefs.getString("mode", "");
         tvMode = forced.length() > 0 ? forced.equals("tv") : detectTv();
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        if (tvMode) getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // only the TV stays awake; the phone keeps sending video with its screen off
+        if (tvMode) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);

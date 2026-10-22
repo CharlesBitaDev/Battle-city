@@ -91,6 +91,12 @@ public class MediaServer {
         return active.get();
     }
 
+    /** When the TV last asked for anything (its player reads ahead in bursts, with gaps between). */
+    public long lastRequestAt() {
+        return lastRequest;
+    }
+    private volatile long lastRequest;
+
     public void stop() {
         running = false;
         try {
@@ -125,6 +131,7 @@ public class MediaServer {
             OutputStream out = s.getOutputStream();
             String head = readHead(in);
             if (head == null) return;
+            lastRequest = System.currentTimeMillis();
             String[] lines = head.split("\r\n");
             String[] req = lines[0].split(" ");
             if (req.length < 2) return;
