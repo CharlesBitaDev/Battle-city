@@ -119,6 +119,8 @@ public class MediaServer {
         Media m = null;
         try {
             s.setSoTimeout(60000);
+            // a deep send buffer rides out short Wi-Fi dips instead of starving the TV's player
+            s.setSendBufferSize(1024 * 1024);
             InputStream in = new BufferedInputStream(s.getInputStream());
             OutputStream out = s.getOutputStream();
             String head = readHead(in);

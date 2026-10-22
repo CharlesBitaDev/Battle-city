@@ -472,7 +472,7 @@
       panelOpts = [['newcode', 'New code', 'Phones already set up keep working'], ['forget', 'Forget all phones', 'They will need a code again']];
     } else {
       h = '<h1>Settings</h1>';
-      var best = A ? A.bestMode() : true;
+      var best = A ? A.bestMode() : false;
       panelOpts = [['best', 'Best picture: match the video\'s resolution', best ? 'On' : 'Off'],
         ['asphone', 'Use this device as a phone remote', ''], ['about', 'HomeCast ' + (A ? A.version() : ''), 'Plays the original file on the TV\'s own decoder']];
     }
@@ -636,9 +636,11 @@
     if (st.dur) now.dur = st.dur;
     now.playing = st.playing;
     now.buffering = st.buffering || !st.prepared;
-    $('pSpin').style.display = now.buffering ? 'block' : 'none';
+    var spin = now.buffering ? 'block' : 'none';
+    if ($('pSpin').style.display !== spin) $('pSpin').style.display = spin;
     if (Date.now() - lastSave > 5000) { lastSave = Date.now(); savePosition(false); }
-    renderPlayer();
+    // redrawing over the video costs the TV's graphics chip, so only while the controls show
+    if (controlsShown()) renderPlayer();
     readVolume();
     dirty();
   }
@@ -660,14 +662,17 @@
     bar.className = pFocus === 'bar' ? 'focus' : '';
     bar.firstChild.style.width = pct + '%';
     bar.lastChild.style.left = pct + '%';
-    $('pBtns').innerHTML = PBTN.map(function (b, i) {
+    var btns = PBTN.map(function (b, i) {
       var ic = b[0] === 'play' ? (now.playing ? 'pause' : 'play') : b[0];
       return '<div class="pb' + (i === 1 ? ' big' : '') + (pFocus === 'btns' && pBtn === i ? ' focus' : '') + '">' + icon(ic) + '</div>';
     }).join('');
+    if (btns !== lastBtns) { $('pBtns').innerHTML = btns; lastBtns = btns; }
   }
+  var lastBtns = '';
 
   function showControls() {
     $('player').className = '';
+    renderPlayer();
     armHide();
   }
   // Like other players: the controls fade 4 s after the last key, once the video plays.

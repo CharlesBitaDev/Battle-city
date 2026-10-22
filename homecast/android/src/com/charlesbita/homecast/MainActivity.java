@@ -311,11 +311,18 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
                     videoW = p.getVideoWidth();
                     videoH = p.getVideoHeight();
                     fitVideo();
-                    bestDisplayMode();
                     if (startMs > 0) p.seekTo(startMs);
-                    p.start();
-                    playing = true;
-                    event("prepared");
+                    // After an output mode change the TV's HDMI link needs a moment; starting during
+                    // it can leave the sound out of step with the picture, so wait for it.
+                    ui.postDelayed(new Runnable() {
+                        public void run() {
+                            if (p != mp) return;
+                            p.start();
+                            playing = true;
+                            buffering = false;
+                            event("prepared");
+                        }
+                    }, bestDisplayMode() ? 2500 : 0);
                 }
             });
             m.setOnVideoSizeChangedListener(new MediaPlayer.OnVideoSizeChangedListener() {
@@ -407,14 +414,16 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
         surface.setLayoutParams(lp);
     }
 
-    /** If the video has more lines than the TV's current output and the TV can do more, switch up. */
-    private void bestDisplayMode() {
-        if (Build.VERSION.SDK_INT < 23 || !prefs.getBoolean("bestMode", true) || videoH <= 0) return;
+    /** If the video has more lines than the TV's current output and the TV can do more, switch up.
+     *  Off unless chosen in Settings: on slow TV boxes the switch can cost smooth playback.
+     *  Returns true when it switched. */
+    private boolean bestDisplayMode() {
+        if (Build.VERSION.SDK_INT < 23 || !prefs.getBoolean("bestMode", false) || videoH <= 0) return false;
         Display d = getWindowManager().getDefaultDisplay();
         Display.Mode cur = d.getMode();
         int curLines = Math.min(cur.getPhysicalWidth(), cur.getPhysicalHeight());
         int want = Math.min(videoW, videoH);
-        if (want <= curLines) return;
+        if (want <= curLines) return false;
         // the smallest mode that fits the video, or else the biggest there is (same refresh rate)
         Display.Mode fit = null, biggest = null;
         for (Display.Mode m : d.getSupportedModes()) {
@@ -424,11 +433,12 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
             if (biggest == null || lines > Math.min(biggest.getPhysicalWidth(), biggest.getPhysicalHeight())) biggest = m;
         }
         Display.Mode best = fit != null ? fit : biggest;
-        if (best == null) return;
+        if (best == null) return false;
         WindowManager.LayoutParams lp = getWindow().getAttributes();
         lp.preferredDisplayModeId = best.getModeId();
         getWindow().setAttributes(lp);
         modeChanged = true;
+        return true;
     }
 
     private void restoreDisplayMode() {
@@ -694,7 +704,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback {
             prefs.edit().putBoolean("bestMode", on).apply();
         }
 
-        @JavascriptInterface public boolean bestMode() { return prefs.getBoolean("bestMode", true); }
+        @JavascriptInterface public boolean bestMode() { return prefs.getBoolean("bestMode", false); }
 
         // ---- phone
         @JavascriptInterface public boolean hasMediaPermission() { return MainActivity.this.hasMediaPermission(); }
