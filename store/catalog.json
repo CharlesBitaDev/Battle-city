@@ -42,6 +42,18 @@
       "players": "1-2 players",
       "description": "A maze chase across 30 levels. Steer Pip the mouse to every cheese crumb while four cats hunt him, each in its own way. Grab a big cheese and the cats run scared. A friend can join on a phone.",
       "link": "tinyurl.com/cheesechasetv"
+    },
+    {
+      "id": "homecast",
+      "name": "HomeCast",
+      "package": "com.charlesbita.homecast",
+      "version": 22,
+      "versionName": "1.0.22",
+      "apk": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/dist/homecast.apk",
+      "banner": "https://raw.githubusercontent.com/CharlesBitaDev/Battle-city/ccr-b0870caf-5uxupg/homecast/android/res/drawable-xhdpi/banner.png",
+      "players": "Video player",
+      "description": "Play your phone's videos on the TV over Wi-Fi, in their original quality. Install HomeCast on the phone too: it becomes the remote (browse, play, pause, seek, volume).",
+      "link": "tinyurl.com/homecasttv"
     }
   ]
 }

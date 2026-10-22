@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HomeCast</title>
+<style>
+  /* Old TV WebViews: no `inset`, no `gap` on flex, no `aspect-ratio`. */
+  :root { --bg: #0b0d12; --panel: #161a23; --panel2: #202634; --text: #f4f5f8; --muted: #a3aab9; --dim: #6c7385;
+          --accent: #ff4d4f; --accent2: #ff7a2f; --ok: #3ccf7a; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
+               font-family: Roboto, "Noto Sans", "Segoe UI", Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body.playing { background: transparent; }
+  body.playing #app { display: none; }
+  * { box-sizing: border-box; }
+  svg.i { width: 1em; height: 1em; fill: currentColor; vertical-align: middle; }
+  .hide { display: none !important; }
+
+  /* ============================== TV ============================== */
+  body.tv { font-size: 1vw; }
+  .tv #app { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+  .tv #rail { position: absolute; top: 0; left: 0; bottom: 0; width: 6.2em; background: linear-gradient(90deg, rgba(0,0,0,0.85), rgba(0,0,0,0));
+              padding-top: 3.2em; z-index: 5; transition: width 0.15s; }
+  .tv #rail.open { width: 17em; background: rgba(8,10,14,0.96); }
+  .tv .brand { display: flex; align-items: center; padding: 0 0 2.6em 1.9em; font-weight: 800; font-size: 1.25em; white-space: nowrap; }
+  .tv .brand .logo { width: 2.2em; height: 2.2em; margin-right: 0.8em; flex: none; }
+  .tv .brand span { opacity: 0; transition: opacity 0.15s; }
+  .tv #rail.open .brand span { opacity: 1; }
+  .tv .nav { display: flex; align-items: center; height: 3.6em; margin: 0 0.9em 0.6em; padding-left: 1.05em; border-radius: 0.6em;
+             color: var(--muted); white-space: nowrap; font-size: 1.15em; font-weight: 600; }
+  .tv .nav svg { font-size: 1.85em; flex: none; }
+  .tv .nav b { margin-left: 1em; opacity: 0; font-weight: 600; transition: opacity 0.15s; }
+  .tv #rail.open .nav b { opacity: 1; }
+  .tv .nav.on { color: #fff; }
+  .tv .nav.focus { background: #fff; color: #0b0d12; }
+
+  .tv #main { position: absolute; top: 0; left: 6.2em; right: 0; bottom: 0; overflow: hidden; }
+  .tv #hero { position: absolute; top: 0; left: -6.2em; right: 0; height: 56vh; overflow: hidden; }
+  .tv #heroImg { position: absolute; top: 0; right: 0; width: 72%; height: 100%; object-fit: cover; opacity: 0.9; }
+  .tv #hero .shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                     background: linear-gradient(90deg, var(--bg) 28%, rgba(11,13,18,0.75) 48%, rgba(11,13,18,0) 75%),
+                                 linear-gradient(0deg, var(--bg) 0%, rgba(11,13,18,0) 40%); }
+  .tv #heroText { position: absolute; left: 9.6em; bottom: 3.4em; width: 46em; }
+  .tv #heroFolder { color: var(--accent2); font-weight: 700; font-size: 1.05em; letter-spacing: 0.08em; text-transform: uppercase; }
+  .tv #heroTitle { font-size: 2.9em; font-weight: 800; line-height: 1.12; margin: 0.25em 0 0.35em; max-height: 2.3em; overflow: hidden; }
+  .tv #heroMeta { color: var(--muted); font-size: 1.15em; }
+  .tv #heroMeta i { font-style: normal; display: inline-block; padding: 0.05em 0.45em; border: 0.09em solid var(--dim); border-radius: 0.3em;
+                    font-size: 0.85em; font-weight: 700; color: var(--text); margin-right: 0.7em; }
+  .tv .heroBar { width: 22em; height: 0.3em; background: rgba(255,255,255,0.25); border-radius: 0.3em; margin-top: 1em; overflow: hidden; }
+  .tv .heroBar b { display: block; height: 100%; background: var(--accent); }
+  .tv #heroBtns { margin-top: 1.5em; display: flex; }
+  .tv .btn { display: flex; align-items: center; height: 3.2em; padding: 0 1.6em; border-radius: 0.5em; font-size: 1.15em; font-weight: 700;
+             background: rgba(255,255,255,0.16); color: #fff; margin-right: 1em; }
+  .tv .btn svg { font-size: 1.5em; margin-right: 0.45em; }
+  .tv .btn.focus { background: #fff; color: #0b0d12; transform: scale(1.05); }
+
+  .tv #rows { position: absolute; top: 53vh; left: -6.2em; right: 0; bottom: 0; overflow: hidden; padding-left: 6.2em; }
+  .tv #rowsIn { position: absolute; top: 1.2em; left: 6.2em; right: 0; transition: transform 0.2s ease-out; }
+  .tv .row { height: 15.6em; padding-left: 3.4em; position: relative; }
+  .tv .rowTitle { font-size: 1.45em; font-weight: 700; margin: 0 0 0.6em; height: 1.4em; white-space: nowrap; }
+  .tv .rowTitle small { color: var(--dim); font-weight: 500; font-size: 0.7em; margin-left: 0.6em; }
+  .tv .track { position: relative; height: 12em; white-space: nowrap; transition: transform 0.18s ease-out; }
+  .tv .card { position: absolute; top: 0; width: 15.4em; transition: transform 0.12s; }
+  .tv .thumb { position: relative; width: 15.4em; height: 8.66em; border-radius: 0.55em; background: var(--panel2) center/cover no-repeat;
+               border: 0.22em solid transparent; overflow: hidden; }
+  .tv .thumb .dur { position: absolute; right: 0.45em; bottom: 0.45em; background: rgba(0,0,0,0.75); padding: 0.1em 0.4em;
+                    border-radius: 0.3em; font-size: 0.85em; font-weight: 700; }
+  .tv .thumb .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 0.28em; background: rgba(255,255,255,0.3); }
+  .tv .thumb .bar b { display: block; height: 100%; background: var(--accent); }
+  .tv .thumb .q { position: absolute; left: 0.45em; top: 0.45em; background: rgba(0,0,0,0.65); padding: 0.05em 0.35em; border-radius: 0.25em;
+                  font-size: 0.75em; font-weight: 800; }
+  .tv .ctitle { margin-top: 0.55em; font-size: 1em; font-weight: 600; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .tv .card.focus { transform: scale(1.08); z-index: 2; }
+  .tv .card.focus .thumb { border-color: #fff; }
+  .tv .card.focus .ctitle { color: #fff; }
+
+  .tv #empty { position: absolute; top: 0; left: 6.2em; right: 0; bottom: 0; display: flex; align-items: center; padding-left: 14em; }
+  .tv #empty h1, .tv .panel h1 { font-size: 2.6em; margin: 0 0 0.5em; font-weight: 800; }
+  .tv #empty p, .tv .panel p { color: var(--muted); font-size: 1.3em; line-height: 1.55; margin: 0 0 0.6em; max-width: 44em; }
+  .tv .code { display: inline-block; font-size: 3.4em; font-weight: 800; letter-spacing: 0.3em; padding: 0.15em 0.4em 0.15em 0.7em;
+              background: var(--panel2); border-radius: 0.25em; margin: 0.25em 0 0.4em; }
+  .tv .panel { position: absolute; top: 0; left: 6.2em; right: 0; bottom: 0; padding: 5em 6em 5em 14em; overflow: hidden; }
+  .tv .opt { display: flex; align-items: center; justify-content: space-between; width: 46em; height: 3.8em; padding: 0 1.4em; margin-bottom: 0.8em;
+             border-radius: 0.6em; background: var(--panel); font-size: 1.2em; }
+  .tv .opt span { color: var(--muted); }
+  .tv .opt.focus { background: #fff; color: #0b0d12; }
+  .tv .opt.focus span { color: #333; }
+  .tv .phoneList { margin: 1em 0 2em; font-size: 1.2em; }
+  .tv .phoneList div { margin-bottom: 0.4em; }
+  .dot { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%; background: var(--ok); margin-right: 0.5em; }
+
+  /* player overlay (TV) */
+  #player { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: none; }
+  body.playing #player { display: block; }
+  .tv #player { font-size: 1vw; }
+  #pTop { position: absolute; top: 0; left: 0; right: 0; padding: 2.4em 3.4em 6em; background: linear-gradient(180deg, rgba(0,0,0,0.8), rgba(0,0,0,0));
+          transition: opacity 0.25s; }
+  #pTitle { font-size: 1.9em; font-weight: 800; }
+  #pSub { color: #ddd; font-size: 1.1em; margin-top: 0.3em; }
+  #pBottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 7em 3.4em 2.4em; background: linear-gradient(0deg, rgba(0,0,0,0.85), rgba(0,0,0,0));
+             transition: opacity 0.25s; }
+  #player.idle #pTop, #player.idle #pBottom { opacity: 0; }
+  #pTimes { display: flex; justify-content: space-between; font-size: 1.15em; font-weight: 600; margin-bottom: 0.7em; color: #eee; }
+  #pBar { position: relative; height: 0.4em; background: rgba(255,255,255,0.3); border-radius: 0.3em; }
+  #pBar b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 0.3em; }
+  #pBar i { position: absolute; top: 50%; width: 1.3em; height: 1.3em; margin: -0.65em 0 0 -0.65em; border-radius: 50%; background: #fff; }
+  #pBar.focus { height: 0.6em; }
+  #pBtns { display: flex; justify-content: center; margin-top: 1.6em; }
+  .pb { width: 4.2em; height: 4.2em; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 0.8em;
+        font-size: 1em; background: rgba(255,255,255,0.12); }
+  .pb svg { font-size: 2.2em; }
+  .pb.big { width: 5em; height: 5em; }
+  .pb.big svg { font-size: 2.8em; }
+  .pb.focus { background: #fff; color: #000; }
+  #pSeek { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-size: 2.6em; font-weight: 800;
+           background: rgba(0,0,0,0.55); padding: 0.3em 0.8em; border-radius: 0.4em; display: none; }
+  #pSpin { position: absolute; left: 50%; top: 50%; width: 5em; height: 5em; margin: -2.5em 0 0 -2.5em; border-radius: 50%;
+           border: 0.45em solid rgba(255,255,255,0.25); border-top-color: #fff; animation: spin 0.9s linear infinite; display: none; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  #pSubs { position: absolute; left: 10%; right: 10%; bottom: 9%; text-align: center; font-size: 2.1em; font-weight: 600;
+           text-shadow: 0 0 0.25em #000, 0 0 0.12em #000; white-space: pre-line; }
+  #player:not(.idle) #pSubs { bottom: 22%; }
+  #pVol { position: absolute; right: 3em; top: 50%; transform: translateY(-50%); width: 3.2em; height: 18em; background: rgba(0,0,0,0.6);
+          border-radius: 1.6em; padding: 1em 0; display: none; text-align: center; }
+  #pVol .t { position: relative; width: 0.5em; height: 13em; margin: 0 auto; background: rgba(255,255,255,0.25); border-radius: 0.3em; }
+  #pVol .t b { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 0.3em; }
+  #pVol span { display: block; margin-top: 0.6em; font-weight: 700; }
+  #pMenu { position: absolute; right: 3.4em; bottom: 14em; width: 24em; background: rgba(16,18,24,0.96); border-radius: 0.8em; padding: 0.8em; display: none; }
+  #pMenu h3 { margin: 0.3em 0.6em 0.6em; font-size: 1.2em; color: var(--muted); }
+  #pMenu .opt { width: auto; height: 3em; font-size: 1.1em; margin-bottom: 0.4em; }
+
+  #toast { position: fixed; left: 50%; bottom: 6vh; transform: translateX(-50%); background: var(--panel2); color: #fff; padding: 0.9em 1.4em;
+           border-radius: 0.6em; border-left: 0.35em solid var(--accent); font-size: 1.25em; max-width: 70%; display: none; z-index: 50; }
+  body.phone #toast { font-size: 15px; bottom: 120px; max-width: 90%; }
+
+  /* ============================== phone ============================== */
+  body.phone { font-size: 15px; overflow: hidden; }
+  .phone #app { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .phone #rail { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; height: 56px; padding: 0 12px 0 14px;
+                 background: rgba(11,13,18,0.94); }
+  .phone .brand { display: flex; align-items: center; font-weight: 800; font-size: 19px; flex: 1; }
+  .phone .brand .logo { width: 30px; height: 30px; margin-right: 10px; }
+  .phone .nav { display: none; }
+  .phone #tvChip { display: flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 17px; background: var(--panel2); font-size: 13px;
+                   font-weight: 600; max-width: 55%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phone #tvChip.off .dot { background: #888; }
+  .phone #main { position: relative; }
+  .phone #hero { position: relative; height: 58vw; max-height: 330px; overflow: hidden; }
+  .phone #heroImg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+  .phone #hero .shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(0deg, var(--bg) 2%, rgba(11,13,18,0.2) 60%, rgba(11,13,18,0.35)); }
+  .phone #heroText { position: absolute; left: 16px; right: 16px; bottom: 10px; }
+  .phone #heroFolder { color: var(--accent2); font-weight: 700; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  .phone #heroTitle { font-size: 22px; font-weight: 800; margin: 3px 0 4px; line-height: 1.2; max-height: 2.4em; overflow: hidden; }
+  .phone #heroMeta { color: var(--muted); font-size: 13px; }
+  .phone #heroMeta i { font-style: normal; border: 1px solid var(--dim); border-radius: 4px; padding: 0 4px; font-size: 11px; font-weight: 700; color: #fff; margin-right: 6px; }
+  .phone .heroBar { height: 3px; background: rgba(255,255,255,0.25); margin-top: 8px; border-radius: 2px; overflow: hidden; }
+  .phone .heroBar b { display: block; height: 100%; background: var(--accent); }
+  .phone #heroBtns { display: flex; padding: 12px 16px 4px; }
+  .phone .btn { flex: 1; display: flex; align-items: center; justify-content: center; height: 46px; border-radius: 8px; font-weight: 700; font-size: 15px;
+                background: var(--panel2); margin-right: 10px; }
+  .phone .btn:last-child { margin-right: 0; }
+  .phone .btn.primary { background: #fff; color: #0b0d12; }
+  .phone .btn svg { font-size: 22px; margin-right: 6px; }
+  .phone #rows { padding: 10px 0 190px; }
+  .phone .row { margin-top: 14px; }
+  .phone .rowTitle { font-size: 17px; font-weight: 700; padding: 0 16px 8px; }
+  .phone .rowTitle small { color: var(--dim); font-weight: 500; font-size: 12px; margin-left: 6px; }
+  .phone .track { display: flex; overflow-x: auto; padding: 4px 16px 6px 16px; scroll-padding-left: 16px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .phone .track::-webkit-scrollbar { display: none; }
+  .phone .card { flex: none; width: 42vw; max-width: 220px; margin-right: 10px; scroll-snap-align: start; }
+  .phone .thumb { position: relative; width: 100%; padding-top: 56.25%; border-radius: 8px; background: var(--panel2) center/cover no-repeat;
+                  border: 2px solid transparent; overflow: hidden; }
+  .phone .thumb .dur { position: absolute; right: 5px; bottom: 5px; background: rgba(0,0,0,0.75); padding: 1px 5px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .phone .thumb .q { position: absolute; left: 5px; top: 5px; background: rgba(0,0,0,0.65); padding: 0 4px; border-radius: 3px; font-size: 10px; font-weight: 800; }
+  .phone .thumb .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,0.3); }
+  .phone .thumb .bar b { display: block; height: 100%; background: var(--accent); }
+  .phone .ctitle { margin-top: 5px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phone .card.focus .thumb { border-color: #fff; }
+  .phone .card.focus .ctitle { color: #fff; }
+  .phone #empty { padding: 30px 20px; text-align: center; }
+  .phone #empty h1, .phone .panel h1 { font-size: 21px; margin: 10px 0; }
+  .phone #empty p, .phone .panel p { color: var(--muted); line-height: 1.5; font-size: 14px; }
+  .phone .bigbtn { display: block; margin: 16px auto 0; width: 100%; max-width: 320px; height: 48px; line-height: 48px; border-radius: 8px;
+                   background: #fff; color: #0b0d12; font-weight: 800; font-size: 15px; text-align: center; border: 0; }
+  .phone .bigbtn.alt { background: var(--panel2); color: #fff; }
+
+  /* phone: now playing on the TV */
+  #now { display: none; }
+  .phone #now { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: rgba(22,26,35,0.98); border-top: 1px solid #2a3142;
+                padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); }
+  .phone #now.show { display: block; }
+  .phone #nowTop { display: flex; align-items: center; }
+  .phone #nowImg { width: 64px; height: 36px; border-radius: 4px; object-fit: cover; background: var(--panel2); margin-right: 10px; flex: none; }
+  .phone #nowTitle { flex: 1; font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phone #nowStatus { color: var(--muted); font-size: 12px; font-weight: 500; }
+  .phone .round { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--panel2);
+                  margin-left: 6px; flex: none; border: 0; color: #fff; padding: 0; }
+  .phone .round svg { font-size: 24px; }
+  .phone .round.main { background: #fff; color: #000; width: 52px; height: 52px; }
+  .phone #nowCtl { display: flex; align-items: center; justify-content: center; margin-top: 8px; }
+  .phone .slider { display: flex; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .phone .slider input { flex: 1; margin: 0 10px; accent-color: #ff4d4f; height: 28px; }
+  .phone .slider svg { font-size: 20px; color: #fff; }
+
+  /* phone sheets */
+  #sheet { display: none; }
+  .phone #sheet.show { display: block; position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 30; background: rgba(0,0,0,0.6); }
+  .phone #sheetBox { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-radius: 16px 16px 0 0; padding: 18px 18px 28px;
+                     max-height: 85vh; overflow-y: auto; }
+  .phone #sheetBox h2 { margin: 0 0 6px; font-size: 19px; }
+  .phone #sheetBox p { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 4px 0 12px; }
+  .phone .tvItem { display: flex; align-items: center; padding: 14px; border-radius: 10px; background: var(--panel2); margin-bottom: 8px; font-weight: 700; }
+  .phone .tvItem small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; }
+  .phone .tvItem svg { font-size: 26px; margin-right: 12px; }
+  .phone input.text { width: 100%; height: 46px; border-radius: 8px; border: 1px solid #39415a; background: #0f1219; color: #fff; padding: 0 12px;
+                      font-size: 17px; margin-bottom: 10px; }
+  .phone input.code { letter-spacing: 10px; text-align: center; font-size: 26px; font-weight: 800; }
+  .phone .row2 { display: flex; }
+  .phone .row2 .bigbtn { margin-top: 6px; }
+  .phone .row2 .bigbtn + .bigbtn { margin-left: 10px; }
+  .phone .setRow { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid #262d3d; font-size: 15px; }
+  .phone .setRow span { color: var(--muted); font-size: 13px; }
+  /* phone touch d-pad (moves the TV's selection) */
+  .phone .pad { position: relative; width: 210px; height: 210px; margin: 8px auto 4px; border-radius: 50%; background: var(--panel2); }
+  .phone .pad button { position: absolute; width: 70px; height: 70px; border: 0; background: transparent; color: #fff; font-size: 30px; }
+  .phone .pad .u { left: 70px; top: 0; } .phone .pad .d { left: 70px; bottom: 0; }
+  .phone .pad .l { left: 0; top: 70px; } .phone .pad .r { right: 0; top: 70px; }
+  .phone .pad .k { left: 55px; top: 55px; width: 100px; height: 100px; border-radius: 50%; background: #2c3446; font-size: 17px; font-weight: 800; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="rail">
+    <div class="brand"><svg class="logo" viewBox="0 0 48 48"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3b5c"/><stop offset="1" stop-color="#ff7a2f"/></linearGradient></defs><rect x="3" y="3" width="42" height="42" rx="10" fill="url(#lg)"/><path d="M18 14 L35 24 L18 34 Z" fill="#fff"/></svg><span>HomeCast</span></div>
+    <div class="nav" data-view="home"></div>
+    <div class="nav" data-view="phones"></div>
+    <div class="nav" data-view="settings"></div>
+    <div id="tvChip" class="off hide"><span class="dot"></span><span id="tvChipText">Not connected</span></div>
+  </div>
+  <div id="main">
+    <div id="hero" class="hide">
+      <img id="heroImg" alt="">
+      <div class="shade"></div>
+      <div id="heroText">
+        <div id="heroFolder"></div>
+        <div id="heroTitle"></div>
+        <div id="heroMeta"></div>
+        <div class="heroBar hide" id="heroBar"><b></b></div>
+        <div id="heroBtns"></div>
+      </div>
+    </div>
+    <div id="rows"><div id="rowsIn"></div></div>
+  </div>
+  <div id="empty" class="hide"></div>
+  <div id="panel" class="panel hide"></div>
+</div>
+<div id="player" class="idle">
+  <div id="pSubs"></div>
+  <div id="pSpin"></div>
+  <div id="pSeek"></div>
+  <div id="pVol"><div class="t"><b></b></div><span></span></div>
+  <div id="pTop"><div id="pTitle"></div><div id="pSub"></div></div>
+  <div id="pBottom">
+    <div id="pTimes"><span id="pPos">0:00</span><span id="pDur">0:00</span></div>
+    <div id="pBar"><b></b><i></i></div>
+    <div id="pBtns"></div>
+  </div>
+  <div id="pMenu"></div>
+</div>
+<div id="now">
+  <div id="nowTop"><img id="nowImg" alt=""><div id="nowTitle"><div id="nowName"></div><div id="nowStatus"></div></div>
+    <button class="round" id="nowStop" aria-label="Stop"></button></div>
+  <div class="slider"><span id="nowPos">0:00</span><input type="range" id="nowSeek" min="0" max="1000" value="0" aria-label="Position"><span id="nowDur">0:00</span></div>
+  <div id="nowCtl">
+    <button class="round" id="nowBack" aria-label="Back 10 seconds"></button>
+    <button class="round main" id="nowPlay" aria-label="Play or pause"></button>
+    <button class="round" id="nowFwd" aria-label="Forward 10 seconds"></button>
+    <button class="round" id="nowPadBtn" aria-label="Remote buttons"></button>
+  </div>
+  <div class="slider" id="nowVolRow"><span id="nowVolIcon"></span><input type="range" id="nowVol" min="0" max="15" value="5" aria-label="TV volume"><span id="nowVolNum">5</span></div>
+</div>
+<div id="sheet"><div id="sheetBox"></div></div>
+<div id="toast"></div>
+<script src="js/app.js"></script>
+</body>
+</html>
