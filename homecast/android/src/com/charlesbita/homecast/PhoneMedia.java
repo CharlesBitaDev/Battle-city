@@ -19,9 +19,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Locale;
 
 /** The phone's videos (from Android's media library), as files for MediaServer and as a list. */
 public class PhoneMedia implements MediaServer.Source {
+
+    /** Folders of social apps: never listed, never served to the TV (matched in any case). */
+    private static final String[] HIDDEN_FOLDERS = {"whatsapp", "facebook", "instagram", "tiktok", "tik tok"};
 
     private final Context ctx;
     private final LruCache<String, byte[]> thumbs = new LruCache<String, byte[]>(12 * 1024 * 1024) {
@@ -39,6 +43,28 @@ public class PhoneMedia implements MediaServer.Source {
         return ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, Long.parseLong(id));
     }
 
+    static boolean hiddenFolder(String folder) {
+        if (folder == null) return false;
+        String f = folder.toLowerCase(Locale.ROOT);
+        for (String h : HIDDEN_FOLDERS) if (f.contains(h)) return true;
+        return false;
+    }
+
+    /** True if the video is in a hidden folder, or cannot be found (unknown files are not served). */
+    private boolean hidden(String id) {
+        Cursor c = null;
+        try {
+            c = ctx.getContentResolver().query(uriOf(id), new String[] {MediaStore.Video.Media.BUCKET_DISPLAY_NAME},
+                    null, null, null);
+            if (c == null || !c.moveToFirst()) return true;
+            return hiddenFolder(c.getString(0));
+        } catch (Exception e) {
+            return true;
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
     @Override
     public MediaServer.Media open(String id) throws IOException {
         Uri u;
@@ -47,6 +73,7 @@ public class PhoneMedia implements MediaServer.Source {
         } catch (NumberFormatException e) {
             return null;
         }
+        if (hidden(id)) return null;
         ContentResolver cr = ctx.getContentResolver();
         final ParcelFileDescriptor pfd;
         try {
@@ -67,6 +94,7 @@ public class PhoneMedia implements MediaServer.Source {
 
     @Override
     public byte[] thumb(String id) {
+        if (hidden(id)) return null;
         byte[] cached = thumbs.get(id);
         if (cached != null) return cached;
         Bitmap b = null;
@@ -116,6 +144,7 @@ public class PhoneMedia implements MediaServer.Source {
                 o.put("h", c.getInt(6));
                 o.put("date", c.getLong(7));
                 String folder = c.getString(8);
+                if (hiddenFolder(folder)) continue;
                 o.put("folder", folder != null ? folder : "Videos");
                 String type = c.getString(9);
                 o.put("type", type != null ? type : "");
