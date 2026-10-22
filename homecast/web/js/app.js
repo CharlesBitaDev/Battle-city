@@ -548,7 +548,7 @@
     var start = !fromStart && res && res.p > 30000 && res.p < (it.dur || res.d) - 60000 ? res.p : 0;
     now = { id: id, title: it.title, phone: it.phone, pos: start, dur: it.dur || 0, playing: false, buffering: true, th: it.th };
     view = 'player';
-    document.body.className = 'tv playing';
+    setScreen(true);
     $('pTitle').textContent = it.title;
     $('pSub').textContent = [it.phone, quality(it.w, it.h), it.w && it.h ? it.w + '×' + it.h : ''].filter(Boolean).join('  ·  ');
     $('pSubs').textContent = '';
@@ -563,13 +563,20 @@
     dirty();
   }
 
+  // While a video plays, the page must be see-through: on the TV the video is drawn behind the
+  // WebView, so an opaque <html> background would hide the picture (sound still plays).
+  function setScreen(playing) {
+    document.body.className = playing ? 'tv playing' : 'tv';
+    document.documentElement.className = playing ? 'playing' : '';
+  }
+
   function stopPlayer(ended) {
     if (view !== 'player') return;
     savePosition(ended);
     player.stop();
     now = null;
     view = 'home';
-    document.body.className = 'tv';
+    setScreen(false);
     clearTimeout(idleTimer);
     rebuildKeepFocus();
     dirty();
