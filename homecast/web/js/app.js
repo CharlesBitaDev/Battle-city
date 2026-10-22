@@ -364,7 +364,7 @@
       showVolume();
       dirty();
     } else if (t === 'track') {
-      if (A) A.selectTrack(msg.i | 0, !!msg.on);
+      if (view === 'player') { chooseTrack(msg.i | 0, !!msg.on); showControls(); }
     } else if (t === 'key') {
       key(msg.k, true, 0);
     }
@@ -555,6 +555,7 @@
   function playItem(id, fromStart) {
     var it = D.items[id];
     if (!it) { toast('That video is no longer available. Open HomeCast on the phone.'); return; }
+    if (view === 'player' && now) savePosition(false);
     var res = D.resume[id];
     var start = !fromStart && res && res.p > 30000 && res.p < (it.dur || res.d) - 60000 ? res.p : 0;
     now = { id: id, title: it.title, phone: it.phone, pos: start, dur: it.dur || 0, playing: false, buffering: true, th: it.th };
@@ -667,10 +668,19 @@
 
   function showControls() {
     $('player').className = '';
+    armHide();
+  }
+  // Like other players: the controls fade 4 s after the last key, once the video plays.
+  // While it loads or is paused they stay, and this keeps checking.
+  function armHide() {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(function () {
-      if (now && now.playing && !menu) { $('player').className = 'idle'; pFocus = 'bar'; renderPlayer(); }
-    }, 5000);
+      if (view !== 'player' || !now) return;
+      if (!now.playing || menu) { armHide(); return; }
+      $('player').className = 'idle';
+      pFocus = 'bar';
+      renderPlayer();
+    }, 4000);
   }
   function controlsShown() { return $('player').className !== 'idle'; }
 
@@ -740,6 +750,20 @@
   }
   function playerKeyUp() { /* nothing */ }
 
+  // [{i, type: 'audio'|'text', lang}] of the playing video
+  function trackList() {
+    var all = [];
+    try { all = JSON.parse(player.tracks()); } catch (e) { all = []; }
+    return all.filter(function (t) { return t.type === 'audio' || t.type === 'text'; })
+      .map(function (t) { return { i: t.i, type: t.type, lang: t.lang || '' }; });
+  }
+  // i < 0 turns subtitles off
+  function chooseTrack(i, on) {
+    if (i >= 0) { player.selectTrack(i, on); return; }
+    trackList().forEach(function (t) { if (t.type === 'text') player.selectTrack(t.i, false); });
+    $('pSubs').textContent = '';
+  }
+
   function openTrackMenu(type) {
     var all = [];
     try { all = JSON.parse(player.tracks()); } catch (e) { all = []; }
@@ -762,14 +786,7 @@
     if (k === 'up') menu.sel = Math.max(0, menu.sel - 1);
     else if (k === 'down') menu.sel = Math.min(menu.opts.length - 1, menu.sel + 1);
     else if (k === 'ok') {
-      var o = menu.opts[menu.sel];
-      if (o.i >= 0) player.selectTrack(o.i, true);
-      else {
-        var all = [];
-        try { all = JSON.parse(player.tracks()); } catch (e) { all = []; }
-        all.forEach(function (t) { if (t.type === 'text') player.selectTrack(t.i, false); });
-        $('pSubs').textContent = '';
-      }
+      chooseTrack(menu.opts[menu.sel].i, true);
       menu = null;
     } else if (k === 'back' || k === 'left') menu = null;
     renderMenu();
@@ -836,6 +853,10 @@
     $('nowFwd').addEventListener('click', function () { phoneSend({ t: 'cmd', a: 'skip', ms: 10000 }); });
     $('nowStop').addEventListener('click', function () { phoneSend({ t: 'cmd', a: 'stop' }); });
     $('nowPadBtn').addEventListener('click', function () { openSheet('pad'); });
+    $('nowAudio').innerHTML = icon('audio');
+    $('nowSubs').innerHTML = icon('subs');
+    $('nowAudio').addEventListener('click', function () { openSheet('tracks', 'audio'); });
+    $('nowSubs').addEventListener('click', function () { openSheet('tracks', 'text'); });
     var seek = $('nowSeek');
     seek.addEventListener('input', function () { seeking = true; if (phoneNow) $('nowPos').textContent = fmtTime(seek.value / 1000 * phoneNow.dur); });
     seek.addEventListener('change', function () {
@@ -1071,6 +1092,8 @@
     D.focus = { r: r, c: c };
     updateFocusView();
     phoneSend({ t: 'focus', r: r, c: c });
+    var row = D.rows[r];
+    if (row && row.ids[c]) phonePlay(row.ids[c], 'resume');
   }
   function phonePlay(id, from) {
     if (!P.ok) { toast('Connect to your TV first.'); openSheet('tv'); return; }
@@ -1142,6 +1165,13 @@
         '<input class="text code" id="shCode" inputmode="numeric" maxlength="4" autocomplete="off"><button class="bigbtn" id="shCodeGo">Connect</button>';
     } else if (kind === 'wifi') {
       h = '<h2>Connect to Wi-Fi</h2><p>HomeCast only uses your home Wi-Fi (or the TV\'s hotspot), never mobile data. Connect this phone to the same Wi-Fi as the TV, then try again.</p><button class="bigbtn" id="shSearch">Try again</button>';
+    } else if (kind === 'tracks') {
+      var ts = ((phoneNow && phoneNow.tracks) || []).filter(function (t) { return t.type === extra; });
+      var opts = ts.map(function (t, n) { return [t.i, (extra === 'audio' ? 'Sound ' : 'Subtitles ') + (n + 1) + (t.lang && t.lang !== 'und' ? ' (' + t.lang + ')' : '')]; });
+      if (extra === 'text' && opts.length) opts.unshift([-1, 'Subtitles off']);
+      h = '<h2>' + (extra === 'audio' ? 'Sound' : 'Subtitles') + '</h2>' + (opts.length
+        ? opts.map(function (o) { return '<div class="setRow" data-ti="' + o[0] + '">' + esc(o[1]) + '<span>›</span></div>'; }).join('')
+        : '<p>' + (extra === 'audio' ? 'This video has one sound track.' : 'This video has no subtitles inside it.') + '</p>');
     } else if (kind === 'pad') {
       h = '<h2>TV remote</h2><p>Moves the selection on the TV, just like its remote.</p><div class="pad">' +
         '<button class="u" data-k="up">' + icon('up') + '</button><button class="l" data-k="left">' + icon('left') + '</button>' +
@@ -1168,6 +1198,9 @@
     Array.prototype.forEach.call(b.querySelectorAll('.tvItem'), function (d) {
       d.addEventListener('click', function () { var t = (P.found || [])[+d.getAttribute('data-i')]; closeSheet(); if (t) { P.key = savedKeyFor(t); connect(t); } });
     });
+    Array.prototype.forEach.call(b.querySelectorAll('[data-ti]'), function (d) {
+      d.addEventListener('click', function () { var i = +d.getAttribute('data-ti'); phoneSend({ t: 'track', i: i, on: i >= 0 }); closeSheet(); });
+    });
     Array.prototype.forEach.call(b.querySelectorAll('[data-k]'), function (d) {
       d.addEventListener('click', function () { phoneSend({ t: 'key', k: d.getAttribute('data-k') }); });
     });
@@ -1192,7 +1225,10 @@
     key: function (k, down, repeat) { key(k, down, repeat); },
     onPlayer: function (e, info) {
       if (!TV || view !== 'player') return;
-      if (e === 'prepared' || e === 'ready') { $('pSpin').style.display = 'none'; if (now) now.buffering = false; }
+      if (e === 'prepared' || e === 'ready') {
+        $('pSpin').style.display = 'none';
+        if (now) { now.buffering = false; now.tracks = trackList(); }
+      }
       else if (e === 'buffering') $('pSpin').style.display = 'block';
       else if (e === 'ended') { stopPlayer(true); }
       else if (e === 'error') {
