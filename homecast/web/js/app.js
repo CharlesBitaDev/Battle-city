@@ -302,7 +302,7 @@
   function onPhone(id, msg) {
     var t = msg.t, ph = phones[id];
     if (t === '_open') { phones[id] = { ip: msg.ip, paired: false }; return; }
-    if (t === '_close') { delete phones[id]; if (view === 'phones') renderPanel(); return; }
+    if (t === '_close') { delete phones[id]; if (view === 'phones') renderPanel(); if (!D.rows.length) renderEmpty(); return; }
     if (!ph) ph = phones[id] = { paired: false };
     if (t === 'hello') {
       var key = '';
@@ -326,12 +326,13 @@
       sendTo(id, libMsg());
       sendTo(id, stateMsg());
       toast(ph.name + ' is connected', 3000);
+      if (!D.rows.length) renderEmpty();
       if (view === 'phones') renderPanel();
       return;
     }
     if (!ph.paired) return;
     if (t === 'lib') {
-      sources[ph.dev] = { name: ph.name, items: (msg.items || []).map(function (it) { it.phone = ph.name; it.dev = ph.dev; return it; }) };
+      sources[ph.dev] = { name: ph.name, perm: msg.perm !== false, items: (msg.items || []).map(function (it) { it.phone = ph.name; it.dev = ph.dev; return it; }) };
       rebuild();
       broadcast(libMsg());
       dirty();
@@ -420,6 +421,16 @@
   }
 
   function renderEmpty() {
+    var on = Object.keys(phones).map(function (id) { return phones[id]; }).filter(function (p) { return p.paired; });
+    if (on.length) {
+      var ph = on[0], src = sources[ph.dev];
+      var noPerm = src && src.perm === false;
+      $('empty').innerHTML = '<div><h1>' + esc(ph.name) + ' is connected</h1>' +
+        (noPerm ? '<p>On the phone, tap <b>Allow access to videos</b> so HomeCast can share them with this TV.</p>'
+          : '<p>' + (src ? 'It has no videos to share.' : 'Waiting for its videos…') + ' Videos in WhatsApp, Facebook, Instagram and TikTok folders are not shown.</p>') +
+        '<p>To add another phone, enter this code on it:</p><div class="code">' + esc(code) + '</div></div>';
+      return;
+    }
     var ips = A ? JSON.parse(A.addresses()) : ['127.0.0.1'];
     $('empty').innerHTML = '<div><h1>Play your phone\'s videos here</h1>' +
       '<p>1. Connect the phone to the same Wi-Fi as this TV' + (ips.length ? ' (TV address: <b>' + esc(ips.join(', ')) + '</b>)' : '') + '.</p>' +
@@ -837,8 +848,7 @@
     $('app').addEventListener('scroll', phoneScrolled, { passive: true });
     $('sheet').addEventListener('click', function (e) { if (e.target.id === 'sheet') closeSheet(); });
 
-    if (A && !A.hasMediaPermission()) { showPermission(); }
-    else loadLibrary();
+    loadLibrary();
     var saved = load('tv', null);
     if (saved && saved.ip) { P.key = saved.key || ''; connect(saved); }
     else discover();
@@ -906,7 +916,8 @@
     $('main').className = has ? '' : 'hide';
     $('empty').className = has ? 'hide' : '';
     if (!has) {
-      $('empty').innerHTML = '<h1>No videos found</h1><p>Videos you record or download on this phone appear here.</p>';
+      if (A && !A.hasMediaPermission()) showPermission();
+      else $('empty').innerHTML = '<h1>No videos found</h1><p>Videos you record or download on this phone appear here. Videos in WhatsApp, Facebook, Instagram and TikTok folders are not shown.</p>';
     }
     renderRows();
     updateFocusView();
@@ -1005,10 +1016,11 @@
   var lastLib = '';
   function sendLibrary(force) {
     if (!P.ok || !P.lib) return;
-    var items = libItems(), json = JSON.stringify(items);
+    var perm = A ? A.hasMediaPermission() : true;
+    var items = libItems(), json = (perm ? 'p' : 'n') + JSON.stringify(items);
     if (!force && json === lastLib) return;
     lastLib = json;
-    phoneSend({ t: 'lib', items: items });
+    phoneSend({ t: 'lib', items: items, perm: perm });
   }
   function phoneSend(o) {
     if (P.ws && P.ok && P.ws.readyState === 1) { P.ws.send(JSON.stringify(o)); return true; }
@@ -1203,7 +1215,7 @@
     onPermission: function (ok) { if (ok) { loadLibrary(); if (P.ok) sendLibrary(); } else showPermission(); },
     onResume: function () {
       if (TV) return;
-      if (A && A.hasMediaPermission()) loadLibrary();
+      if (A) loadLibrary();
       if (!P.ok && P.tv) connect(P.tv);
     },
     onPause: function () { },
